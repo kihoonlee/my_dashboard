@@ -73,8 +73,9 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Auth callback 라우트와 정적 자원은 proxy 건너뜀
+  // 정적 자원 + Next 내부 라우트(_next/*: HMR 웹소켓 / RSC payload / chunks 포함) 모두 proxy 건너뜀.
+  // 이전에 _next/webpack-hmr이 매칭되어 WebSocket이 /auth/login으로 리다이렉트 시도되며 깨졌음.
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|avif|ico)$).*)",
+    "/((?!_next|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|avif|ico)$).*)",
   ],
 };

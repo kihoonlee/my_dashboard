@@ -1,13 +1,33 @@
 "use client";
 
-import { Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
 function LoginContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/";
+  const code = searchParams.get("code");
+  const [exchanging, setExchanging] = useState<boolean>(false);
+
+  // Defensive: Supabase가 redirectTo를 정확히 매칭 못해 /auth/callback이 아닌 /auth/login으로
+  // code를 들고 떨어뜨리는 케이스를 처리. 정상 흐름은 /auth/callback route handler 사용.
+  useEffect(() => {
+    if (!code) return;
+    setExchanging(true);
+    const supabase = createSupabaseBrowserClient();
+    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+      if (error) {
+        router.replace(
+          `/auth/error?reason=exchange_failed&description=${encodeURIComponent(error.message)}`,
+        );
+        return;
+      }
+      router.replace(next);
+    });
+  }, [code, next, router]);
 
   async function handleGoogleSignIn() {
     const supabase = createSupabaseBrowserClient();
@@ -43,15 +63,18 @@ function LoginContent() {
             로그인
           </h1>
           <p className="text-sm text-muted-foreground">
-            등록된 Google 계정으로만 접근할 수 있습니다.
+            {exchanging
+              ? "세션을 만드는 중..."
+              : "등록된 Google 계정으로만 접근할 수 있습니다."}
           </p>
         </header>
 
         <Button
           onClick={handleGoogleSignIn}
+          disabled={exchanging}
           className="w-full justify-center h-11"
         >
-          Google로 계속하기
+          {exchanging ? "처리 중..." : "Google로 계속하기"}
         </Button>
 
         <p className="text-xs text-muted-foreground text-center leading-relaxed">
