@@ -1,8 +1,8 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-05 15:31**
-> 기반 문서: [`MyHub_기획서_v2.1.md`](file:///C:/Users/wanna/Downloads/MyHub_%EA%B8%B0%ED%9A%8D%EC%84%9C_v2.1.md) (1,448줄)
-> 개발 계획: `C:\Users\wanna\.claude\plans\c-users-wanna-downloads-myhub-v2-1-md-frolicking-iverson.md`
+> 최종 업데이트: **2026-05-05 22:40 (Mac 환경에서 Phase 0 Day 2 마무리)**
+> 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
+> 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md` (Mac 이전 후 Day 2 마무리 플랜)
 
 ---
 
@@ -12,7 +12,7 @@
 
 - **유형**: 개인 프로젝트 (kihoonlee 계정)
 - **로드맵**: 10주 풀빌드 (기획서 그대로) + 11-12주 버퍼
-- **현재 위치**: **Phase 0 Day 2 진행 중** (셋업 단계, DB 셋업 직전)
+- **현재 위치**: **Phase 0 Day 2 완료** (Mac 환경, 로컬 Supabase 기반 DB 셋업 검증됨). Day 3 진입 가능.
 
 ---
 
@@ -20,32 +20,29 @@
 
 | 항목 | 값 |
 |---|---|
-| **로컬 경로** | `D:\test\kihoon_dashboard` |
-| **리모트** | `git@github-kihoonlee:kihoonlee/my_dashboard.git` (SSH alias) |
+| **로컬 경로 (현재)** | `/Users/kihoon_mac/work/mywork/my_dashboard` (Mac) |
+| **로컬 경로 (Windows, 참고)** | `D:\test\kihoon_dashboard` |
+| **리모트** | `git@github.com:kihoonlee/my_dashboard.git` (Mac은 default SSH key 사용) |
 | **GitHub URL** | https://github.com/kihoonlee/my_dashboard |
-| **Default branch** | `master` (origin/master 동기화 완료) |
-| **사용자** | `kihoonlee <powergenes@gmail.com>` (project-local config) |
-| **SSH 키** | `~/.ssh/kihoonlee_pc` (config alias `github-kihoonlee`) |
+| **Default branch** | `master` |
+| **사용자** | `kihoonlee <powergenes@gmail.com>` |
 
 ### 커밋 히스토리
 
 ```
+e2588fb  docs: add progress.md (project status snapshot)
 42a4b00  feat: phase 0 day 2 — DB layer + Supabase CLI
 026f819  feat: phase 0 day 1 — design system foundation
 9c11e96  Initial commit from Create Next App
 ```
 
-### SSH 다중 계정 분리
+### SSH 다중 계정 (PC별 차이)
 
-`~/.ssh/config`에 두 계정이 분리 설정되어 있음:
+- **Windows PC**: `~/.ssh/config`에 `github.com → home_flow` / `github-kihoonlee → kihoonlee_pc` 분리 alias.
+  Windows에서 push할 때만 remote URL이 `git@github-kihoonlee:kihoonlee/my_dashboard.git` 형식이어야 함.
+- **Mac**: 기본 SSH key가 kihoonlee 계정과 연결됨. Remote URL은 표준 `git@github.com:kihoonlee/my_dashboard.git` 그대로 사용.
 
-```
-Host github.com               → home_flow 키       (mioichinose0817 계정, 다른 사업)
-Host github-kihoonlee         → kihoonlee_pc 키    (kihoonlee 개인 계정)
-```
-
-따라서 이 프로젝트의 remote URL은 반드시 `git@github-kihoonlee:` 형식이어야 함.
-다른 개인 프로젝트도 동일하게 처리.
+따라서 progress.md의 remote URL 표기는 PC에 따라 다르며, GitHub 측 repo는 동일.
 
 ---
 
@@ -113,35 +110,36 @@ gmail_cache
 
 ---
 
-## 3. 현재 차단된 작업 (Phase 0 Day 2 마무리)
+## 3. Phase 0 Day 2 완료 (Mac 환경, 2026-05-05)
 
-> **Blocker**: Docker Desktop이 실행 중이지 않음.
-> Daemon이 `//./pipe/dockerDesktopLinuxEngine` 파이프에 응답하지 않음.
+Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마무리. Docker Desktop 블로커는 Mac에선 처음부터 실행 중이라 해결됨.
 
-### 사용자 액션 필요
+### 진행 흐름
 
-1. **Docker Desktop 시작** (Windows 시작 메뉴 또는 시스템 트레이 고래 아이콘)
-2. 좌하단 상태가 **"Engine running"** (녹색)이 될 때까지 대기 (30초~1분)
-3. "시작됨" 한 마디 회신
-
-### Docker 시작 후 자동 실행 (인터럽트 없음)
-
-| # | 명령 | 예상 시간 |
+| # | 단계 | 결과 |
 |---|---|---|
-| 1 | `npx supabase start` (14개 컨테이너, 첫 이미지 다운로드 포함) | 5-10분 |
-| 2 | 출력에서 로컬 DB URL + anon/service keys → `.env.local`에 자동 반영 | 즉시 |
-| 3 | `npm run db:enable-extensions` (vector + pgcrypto + pg_trgm) | 5초 |
-| 4 | `npm run db:push` (26개 테이블 + HNSW 인덱스) | 10초 |
-| 5 | `npm run db:seed` (10명 Agent upsert) | 5초 |
-| 6 | `npx supabase status`로 검증 | 즉시 |
-| 7 | Phase 0 Day 2 마무리 커밋 + push | 즉시 |
+| 1 | `git clone git@github.com:kihoonlee/my_dashboard.git` (Mac) | 4 commits clone |
+| 2 | `npm install` | 672 packages, 8s |
+| 3 | `.env.local` 1차 작성 (클라우드 `fquxtvaunhirrwenlhrv` 키) | tenant not found 에러 — ref가 현재 supabase CLI 로그인 계정에 없음 |
+| 4 | **클라우드 → 로컬 Supabase로 전환** | `.env.local.cloud-backup`로 1차 파일 보관 후, 로컬 키로 재작성 |
+| 5 | `npx supabase start` | 12개 컨테이너 Running (imgproxy/pooler 2개는 default disabled) |
+| 6 | `npm run db:enable-extensions` | vector 0.8.0 / pgcrypto 1.3 / pg_trgm 1.6 ✓ |
+| 7 | `npx drizzle-kit push --force` | 26개 테이블 + HNSW 인덱스 적용. **TTY 이슈 우회 위해 `--force` 필요** |
+| 8 | `npm run db:seed` (env export 우회) | 10명 Agent upsert ✓. **dotenv 호이스팅 버그 우회 위해 `set -a; source .env.local; set +a` 선행** |
+| 9 | DoD 검증 | 4/4 PASS (아래) |
 
-### Day 2 완료 기준 (DoD)
+### Day 2 완료 기준 (DoD) — 4/4 ✅
 
-- [ ] 로컬 Supabase 14개 컨테이너 실행 중 (`supabase status`로 확인)
-- [ ] `agents` 테이블에 10개 row (`SELECT english_name FROM agents` → 10건)
-- [ ] `obsidian_notes.embedding` 컬럼이 vector(1024) 타입
-- [ ] HNSW 인덱스 `obsidian_notes_embedding_idx` 존재
+- [x] 로컬 Supabase 12개 핵심 컨테이너 실행 중 (postgres / postgrest / kong / gotrue / realtime / storage-api / postgres-meta / studio / edge-runtime / vector / mailpit / logflare). imgproxy + pooler 2개는 사용 안 함.
+- [x] `agents` 테이블 10 row (혜원/하영/수민/서연/다솜/현주/도연/민영/정연/민지)
+- [x] `obsidian_notes.embedding`은 `vector(1024)` 타입 (drizzle push 출력 + information_schema 검증)
+- [x] HNSW 인덱스 `obsidian_notes_embedding_idx ... USING hnsw (embedding vector_cosine_ops)` 존재
+
+### 발견된 잠재 이슈 (Day 3에서 정리 권장)
+
+1. **drizzle-kit push가 TTY 요구** — `drizzle.config.ts`의 `strict: true` + non-TTY 환경(에이전트/CI)에서 인터랙티브 prompt 실패. 우회: `--force` 사용. 권장: package.json의 `db:push` 스크립트를 `drizzle-kit push --force`로 바꾸거나, 또는 strict 토글 정책 정립.
+2. **`lib/db/seed.ts`의 dotenv 호이스팅 버그** — `import { config } from "dotenv"; config(...)` 후 `import { db } from "./client"` 순서지만, ES module은 import가 항상 먼저 호이스팅돼서 `client.ts`의 `process.env.DATABASE_URL` 체크가 dotenv 로드 전에 실행됨. 우회: `set -a; source .env.local; set +a; npm run db:seed`. 수정 옵션: (a) `client.ts`에서 dotenv 로드 (b) seed.ts에서 dynamic import로 변경 (c) tsx에 `--env-file=.env.local` 전달.
+3. **클라우드 Supabase 프로젝트 정리** — `.env.local.cloud-backup`에 `fquxtvaunhirrwenlhrv` ref가 적혀 있으나 현재 supabase CLI 로그인 계정(`osprahfpujlqmyfwnqll` org — FlowTo.ai)에는 그 프로젝트가 없음. 다른 supabase 계정에 있거나 삭제됨. Phase 7 배포 전에 production 프로젝트 신규 생성 여부 결정 필요.
 
 ---
 
@@ -220,14 +218,25 @@ gmail_cache
 
 ## 5. 환경 / 의존성
 
-### 시스템
+### 시스템 (Mac, 현재)
+
+| 항목 | 버전 |
+|---|---|
+| OS | macOS (kihoon_mac) |
+| Node.js | v24.14.0 |
+| npm | 11.9.0 (→ 11.13.0 권장) |
+| git | 시스템 기본 |
+| Docker | 29.3.0 (Daemon 실행 중 ✅) |
+| Supabase CLI | 2.75.0 (homebrew, 권장 v2.98.1) + 2.98.1 (devDep, npx 호출 시) |
+
+### 시스템 (Windows, 참고)
 
 | 항목 | 버전 |
 |---|---|
 | Node.js | v24.13.0 |
 | npm | 11.6.2 |
 | git | 2.38.0.windows.1 |
-| Docker | 27.4.0 (Daemon 정지 상태) |
+| Docker | 27.4.0 |
 | gh CLI | 2.88.1 (활성 계정: mioichinose0817) |
 
 ### 핵심 dependencies
@@ -275,8 +284,12 @@ supabase        ^2.98.1
 
 - Anthropic API Key
 - GitHub PAT (FlowTo-ai 조직 + kihoonlee 개인)
-- Supabase 클라우드 프로젝트 (`fquxtvaunhirrwenlhrv.supabase.co`) — production 배포 시 사용
+- 로컬 Supabase 스택 (Mac Docker 27.4.0+ / Supabase CLI npx) — Phase 0~6 dev에서 사용
 - 옵시디언 vault (Phase 3에서 GitHub repo로 동기화 예정)
+
+### ⚠️ 재확인 필요
+
+- Supabase 클라우드 production 프로젝트 — `.env.local.cloud-backup`에 적힌 `fquxtvaunhirrwenlhrv` ref가 현재 supabase CLI 로그인 계정에서 보이지 않음 (다른 계정에 있거나 삭제됨). Phase 7 배포 전 새로 생성하거나 진짜 가지고 있는 계정으로 로그인해 정리 필요.
 
 ### ❌ 미보유 (해당 Phase 진입 전 발급)
 
@@ -333,19 +346,27 @@ supabase        ^2.98.1
 
 ---
 
-## 10. 다음 즉시 액션
+## 10. 다음 즉시 액션 (Day 3 진입)
+
+Phase 0 Day 2는 완료 커밋·푸시까지 마쳤음. 다음 세션부터는 Day 3 작업으로 진입.
 
 ```
-[사용자]
-  1. Docker Desktop 시작
-  2. 시스템 트레이 고래 아이콘 'Engine running' 확인
-  3. 채팅에 "시작됨" 회신
+[Day 3 우선순위]
+  1. Drizzle 스키마 재검토 + 시드 데이터 보완
+     - schema.ts 26개 테이블 도메인별 일관성 점검
+     - 누락된 인덱스/제약조건 추가
+     - lib/agents/definitions.ts 시스템 프롬프트 1차 다듬기
+  2. Day 2에서 발견된 잠재 이슈 정리
+     - drizzle-kit push --force 정책 (또는 strict 토글) 결정해 npm scripts 반영
+     - lib/db/seed.ts dotenv 호이스팅 버그 수정 (client.ts에서 dotenv 로드 권장)
+  3. (선택) Day 4 사전 준비
+     - Google Cloud Console에서 OAuth 클라이언트 ID/Secret 발급
+     - Authorized redirect URI: http://localhost:54321/auth/v1/callback (로컬 supabase)
 
-[Claude]
-  4. npx supabase start (백그라운드, 5-10분)
-  5. 로컬 DB URL + 키 → .env.local 자동 반영
-  6. db:enable-extensions → db:push → db:seed
-  7. supabase status로 검증
-  8. Phase 0 Day 2 마무리 커밋 + push
-  9. Phase 0 Day 3로 진행 결정 확인
+[Day 4]
+  - Supabase Auth Google OAuth 연결 + ALLOWED_EMAIL 화이트리스트
+  - middleware.ts에서 세션 검사 + 로그인 페이지 라우팅
+
+[Day 5]
+  - 사이드바 11개 메뉴 + 헤더 ⌘K + 플로팅 채팅 골격 + 다크모드 토글
 ```
