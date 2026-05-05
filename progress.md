@@ -12,7 +12,7 @@
 
 - **유형**: 개인 프로젝트 (kihoonlee 계정)
 - **로드맵**: 10주 풀빌드 (기획서 그대로) + 11-12주 버퍼
-- **현재 위치**: **Phase 0 전체 완료** (Day 1 디자인 토큰 → Day 2 DB → Day 3 잠재 이슈 정리 → Day 4 OAuth → Day 5 셸 UI). Phase 1 진입 가능.
+- **현재 위치**: **Phase 1 완료** (하영 첫 Agent 라이브). Phase 2 진입 가능.
 
 ---
 
@@ -160,13 +160,20 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 | Day 4 | Supabase Auth Google OAuth + 화이트리스트 (proxy.ts + auth 라우트) | `ebc6387` |
 | Day 5 | 글로벌 셸 UI (사이드바 11메뉴 / 헤더 ⌘K placeholder / 플로팅 채팅 / 라이트 기본 + 다크 토글) | (현재 커밋) |
 
-### Phase 1 (Week 2) — Agent 호출 골격 + 첫 Agent (하영)
+### Phase 1 (Week 2) — ✅ 완료 — Agent 호출 골격 + 첫 Agent (하영)
 
-- `/api/agents/[name]/invoke` 통일 라우트 (모델 라우팅 + 비용 추적 + agent_logs 자동 기록)
-- `lib/agents/guard.ts` (비용 한도 + 5연속 오류 자동 일시정지)
-- Anthropic SDK 래퍼
-- 하영 시스템 프롬프트 + Todo CRUD + 자동 분류
-- `AgentBadge` 컴포넌트
+| 항목 | 결과 |
+|---|---|
+| `@anthropic-ai/sdk` 0.93.0 + `lib/anthropic/client.ts` | 모델 라우팅 + prompt caching (system + tools에 cache_control) |
+| `lib/anthropic/pricing.ts` | Sonnet 4.6 / Haiku 4.5 / Opus 4.6/4.7 토큰 가격 + 비용 계산 헬퍼 |
+| `lib/agents/guard.ts` | 일·월 비용 한도 + 5연속 오류 자동 일시정지 |
+| `app/api/agents/[name]/invoke/route.ts` | 통일 라우트, max_iterations=5, 동일 도구·동일 인자 2회 가드 |
+| `lib/agents/tools/hayoung.ts` | 4개 tool: create_todo / list_todos_today / complete_todo / update_todo_due_date |
+| 하영 system prompt 정밀화 | tool 사용 가이드 + 행동 규칙. Haiku 4.5, max_tokens=1024 |
+| `components/agent-badge.tsx` | 영문명 → --agent-{englishName} 컬러 토큰 매핑 |
+| `app/(app)/today/page.tsx` | 미완료 Todo 그리드 + 하영 채팅 (메타: iterations / duration / cost / tokens) |
+| `app/api/todos/today/route.ts` + `[id]/complete/route.ts` | UI에서 LLM 안 거치는 직접 경로 |
+| 빌드 검증 | next build 성공, 10 라우트 + Proxy 등록 |
 
 ### Phase 2 (Week 3) — 채팅(민지) + 혜원 + Calendar
 
@@ -361,27 +368,22 @@ supabase        ^2.98.1
 
 ---
 
-## 10. 다음 즉시 액션 (Phase 1 진입)
+## 10. 다음 즉시 액션 (Phase 2 진입)
 
-Phase 0 전체 완료 (Day 1~5). 다음은 **Phase 1 — Agent 호출 골격 + 첫 Agent (하영)**.
+Phase 1 완료 — 하영 라이브 동작 검증 완료. 다음은 **Phase 2 — 채팅(민지) + 혜원 + Calendar**.
 
 ```
-[Phase 1 Week 2]
-  1. lib/anthropic/client.ts — Anthropic SDK 래퍼 (모델 라우팅 sonnet/haiku)
-     - prompt caching 적용 (시스템 프롬프트 + tool defs 캐시)
-  2. /api/agents/[name]/invoke 통일 라우트
-     - agents 테이블 조회 → 모델·프롬프트·권한 적용
-     - 호출 직후 agent_logs 자동 insert (input/output tokens, cost, duration, error)
-  3. lib/agents/guard.ts
-     - 일·월 비용 한도 검사 (agents.daily_cost_limit_usd / monthly_cost_limit_usd)
-     - 5연속 오류 시 agents.is_active=false + is_paused_reason 기록
-  4. 하영(today_manager) 1차 시스템 프롬프트 정밀화 + Todo CRUD tool
-     - tool: create_todo / update_todo / list_todos_due_today / classify_todo
-  5. AgentBadge 컴포넌트 (영문명 → --agent-{englishName} 컬러 토큰)
-  6. /today 페이지 → 하영 호출 + Todo 그리드
+[Phase 2 Week 3]
+  1. 혜원 시스템 프롬프트 정밀화 + 홈 Hero 위젯
+  2. /api/chat/route.ts — 민지 메인 엔드포인트 (Anthropic tool use 다단계 루프)
+     - tool: ask_hayoung (Phase 1 라우트 호출 위임)
+     - 처음엔 하영·혜원만 호출 가능, 점진 확장
+     - max_iterations=5 + 동일 tool 2회 호출 가드 (Phase 1과 동일)
+  3. /chat 페이지 + 플로팅 모달 + ⌘K 명령 팔레트 연결
+  4. Google Calendar 동기화 + Refresh Token pgcrypto 암호화 저장
+  5. Supabase Realtime 응답 스트리밍
 
-[Phase 1 진입 전 결정/액션]
-  - 민지 비용 상한선 (#3 미결정) — 일 $3 유지? $5? 월 $30 캡?
-  - Anthropic API key가 ANTHROPIC_API_KEY로 .env.local에 있는지 확인
-  - Google Cloud Console redirect URI 검증 (Day 4 사전 체크리스트)
+[Phase 2 진입 전 결정/액션]
+  - 민지 비용 상한선 결정 (현재 시드 일 $3, 월 미정) — 메인 엔드포인트라 가장 호출량 많음
+  - Calendar API scope 추가 → Google Cloud Console에서 OAuth scope 갱신
 ```
