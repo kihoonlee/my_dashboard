@@ -1,64 +1,69 @@
-import Image from "next/image";
+import { Button } from "@/components/ui/button";
+
+const AGENTS = [
+  { name: "혜원", english: "Hyewon", role: "오케스트레이터", color: "var(--agent-hyewon)" },
+  { name: "하영", english: "Hayoung", role: "오늘 매니저", color: "var(--agent-hayoung)" },
+  { name: "수민", english: "Soomin", role: "목표 코치", color: "var(--agent-soomin)" },
+  { name: "서연", english: "Seoyeon", role: "지식 사서", color: "var(--agent-seoyeon)" },
+  { name: "다솜", english: "Dasom", role: "캡처 비서", color: "var(--agent-dasom)" },
+  { name: "현주", english: "Hyunju", role: "사업 매니저", color: "var(--agent-hyunju)" },
+  { name: "도연", english: "Doyeon", role: "개발 도구", color: "var(--agent-doyeon)" },
+  { name: "민영", english: "Minyoung", role: "뉴스 큐레이터", color: "var(--agent-minyoung)" },
+  { name: "정연", english: "Jeongyeon", role: "메일 정리자", color: "var(--agent-jeongyeon)" },
+  { name: "민지", english: "Minji", role: "메타 챗봇", color: "var(--agent-minji)" },
+] as const;
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <div className="flex flex-col flex-1 items-center bg-background">
+      <main className="flex flex-1 w-full max-w-5xl flex-col gap-12 py-16 px-6 sm:px-10">
+        <header className="flex flex-col gap-3">
+          <span className="text-xs font-medium tracking-widest text-muted-foreground uppercase">
+            Phase 0 · Day 1 · Setup Complete
+          </span>
+          <h1 className="text-4xl font-bold tracking-tight text-foreground sm:text-5xl">
+            MyHub
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-lg leading-relaxed text-muted-foreground max-w-2xl">
+            10명의 AI Agent 팀이 사업 운영과 개인 정보를 능동적으로 보좌하는
+            1인용 정보 허브.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+          <div className="flex gap-3 mt-4">
+            <Button>시작하기</Button>
+            <Button variant="outline">기획서 보기</Button>
+          </div>
+        </header>
+
+        <section className="flex flex-col gap-4">
+          <h2 className="text-2xl font-semibold tracking-tight">우리 팀 (10명)</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            {AGENTS.map((agent) => (
+              <div
+                key={agent.english}
+                className="flex flex-col items-center gap-2 p-4 bg-card border border-border rounded-2xl"
+              >
+                <div
+                  className="w-12 h-12 rounded-full flex items-center justify-center text-white font-semibold"
+                  style={{ backgroundColor: agent.color }}
+                >
+                  {agent.name.charAt(0)}
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold text-sm text-foreground">
+                    {agent.name}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {agent.role}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <footer className="text-xs text-muted-foreground border-t border-border pt-6">
+          Next.js · Tailwind v4 · shadcn/ui · Pretendard · Toss Blue
+        </footer>
       </main>
     </div>
   );
