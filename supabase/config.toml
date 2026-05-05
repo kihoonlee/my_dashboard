@@ -155,7 +155,12 @@ site_url = "http://127.0.0.1:3000"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+additional_redirect_urls = [
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
+  "http://localhost:3000/auth/callback",
+  "http://127.0.0.1:3000/auth/callback",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -328,6 +333,19 @@ url = ""
 skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
+
+# Phase 0 Day 4 — Google OAuth (개인 계정 로그인 + Phase 2 Calendar / Phase 5 Gmail 공통)
+# 키는 .env.local의 GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET 으로부터 주입.
+# `npm run supabase:start` 가 .env.local을 로드한 뒤 supabase start를 호출하므로
+# 별도 export 불필요.
+[auth.external.google]
+enabled = true
+client_id = "env(GOOGLE_OAUTH_CLIENT_ID)"
+secret = "env(GOOGLE_OAUTH_CLIENT_SECRET)"
+# 빈 값 → http://127.0.0.1:54321/auth/v1/callback 자동 사용 (로컬 Supabase 기준)
+redirect_uri = ""
+# Local sign-in with Google에서 nonce 검증 우회 (Supabase 공식 가이드 권장).
+skip_nonce_check = true
 
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.

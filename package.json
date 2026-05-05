@@ -12,7 +12,11 @@
     "db:push": "drizzle-kit push",
     "db:push:force": "drizzle-kit push --force",
     "db:studio": "drizzle-kit studio",
-    "db:seed": "tsx lib/db/seed.ts"
+    "db:seed": "tsx lib/db/seed.ts",
+    "supabase:start": "set -a && . ./.env.local && set +a && supabase start",
+    "supabase:stop": "supabase stop",
+    "supabase:status": "supabase status",
+    "supabase:reset": "set -a && . ./.env.local && set +a && supabase db reset"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
