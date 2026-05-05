@@ -5,12 +5,36 @@
 // - 4.6 이상은 streaming 권장 (max_tokens > ~16K), Phase 1 단계에서는 비-스트리밍 1024-tokens.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { readFileSync } from "fs";
+import { resolve } from "path";
 
 let client: Anthropic | null = null;
+let cachedKeyFromFile: string | undefined;
+
+/**
+ * 부모 셸이 ANTHROPIC_API_KEY="" (빈 값)으로 export하면 Next.js의 dotenv는 default
+ * override:false 정책으로 .env.local 값을 적용하지 않는다 (Claude Code harness가
+ * 자식 프로세스에 빈 값 주입하는 케이스 등). 이 fallback은 process.env가 비어있을 때
+ * .env.local을 직접 파싱한다.
+ */
+function readApiKeyFromEnvFile(): string | undefined {
+  if (cachedKeyFromFile !== undefined) return cachedKeyFromFile;
+  try {
+    const content = readFileSync(resolve(process.cwd(), ".env.local"), "utf-8");
+    const m = content.match(/^ANTHROPIC_API_KEY=(.+)$/m);
+    cachedKeyFromFile = m?.[1].trim();
+  } catch {
+    cachedKeyFromFile = undefined;
+  }
+  return cachedKeyFromFile;
+}
 
 export function getAnthropicClient(): Anthropic {
   if (client) return client;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  let apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey || apiKey.length === 0) {
+    apiKey = readApiKeyFromEnvFile();
+  }
   if (!apiKey) {
     throw new Error(
       "ANTHROPIC_API_KEY is not set in environment (.env.local).",
