@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { ThemeProvider, NO_FLASH_SCRIPT } from "@/components/theme-provider";
 
 export const metadata: Metadata = {
   title: "MyHub — Personal Dashboard",
@@ -14,7 +15,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className="h-full antialiased" suppressHydrationWarning>
-      <body className="min-h-full flex flex-col">{children}</body>
+      <head>
+        {/* Hydration 전에 .dark 클래스 결정 (깜빡임 방지). 라이트가 기본값. */}
+        <script dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
+      </head>
+      <body className="min-h-full flex flex-col">
+        <ThemeProvider>{children}</ThemeProvider>
+      </body>
     </html>
   );
 }

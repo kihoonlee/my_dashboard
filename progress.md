@@ -1,8 +1,8 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-05 22:40 (Mac 환경에서 Phase 0 Day 2 마무리)**
+> 최종 업데이트: **2026-05-05 23:30 (Phase 0 전체 완료 — Day 3 + 4 + 5 한 번에 마무리)**
 > 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
-> 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md` (Mac 이전 후 Day 2 마무리 플랜)
+> 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md`
 
 ---
 
@@ -12,7 +12,7 @@
 
 - **유형**: 개인 프로젝트 (kihoonlee 계정)
 - **로드맵**: 10주 풀빌드 (기획서 그대로) + 11-12주 버퍼
-- **현재 위치**: **Phase 0 Day 2 완료** (Mac 환경, 로컬 Supabase 기반 DB 셋업 검증됨). Day 3 진입 가능.
+- **현재 위치**: **Phase 0 전체 완료** (Day 1 디자인 토큰 → Day 2 DB → Day 3 잠재 이슈 정리 → Day 4 OAuth → Day 5 셸 UI). Phase 1 진입 가능.
 
 ---
 
@@ -148,15 +148,17 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 
 ---
 
-## 4. 남은 로드맵 (Phase 0 Day 3 이후)
+## 4. 남은 로드맵 (Phase 1 이후)
 
-### Phase 0 (Week 1) 잔여
+### Phase 0 (Week 1) — ✅ 완료
 
-| Day | 작업 | 사전 조건 |
+| Day | 작업 | 커밋 |
 |---|---|---|
-| **Day 3** | Drizzle 스키마 재검토 + 시드 데이터 보완 | DB 동작 확인 후 |
-| **Day 4** | Supabase Auth Google OAuth + 이메일 화이트리스트 | **Google OAuth 클라이언트 ID/Secret 발급 필요** |
-| **Day 5** | 글로벌 레이아웃 (사이드바 11개 메뉴 / 헤더 ⌘K / 플로팅 채팅) + 다크모드 토글 | — |
+| Day 1 | 디자인 시스템 (토큰·폰트·Agent 컬러) | `026f819` |
+| Day 2 | DB 26테이블 + HNSW + 10 Agent 시드 (Mac 검증 `25bf018`) | `42a4b00` / `25bf018` |
+| Day 3 | dotenv 호이스팅 / drizzle-kit `--force` / dev `-H` 정리 | `c1cbff5` |
+| Day 4 | Supabase Auth Google OAuth + 화이트리스트 (proxy.ts + auth 라우트) | `ebc6387` |
+| Day 5 | 글로벌 셸 UI (사이드바 11메뉴 / 헤더 ⌘K placeholder / 플로팅 채팅 / 라이트 기본 + 다크 토글) | (현재 커밋) |
 
 ### Phase 1 (Week 2) — Agent 호출 골격 + 첫 Agent (하영)
 
@@ -322,7 +324,7 @@ supabase        ^2.98.1
 | 1 | Vercel Pro 가입 의향 ($20/월) | Phase 7 진입 전 | Hobby Cron 한도 초과. 외부 cron(cron-job.org) 대안 가능 |
 | 2 | 임베딩 모델 | Phase 3 진입 전 | Voyage-3(한국어 강함) vs OpenAI text-embedding-3-small(저렴) |
 | 3 | 민지 비용 상한선 | Phase 1 셋업 시 | 일 $5? 월 $30? (현재 시드는 일 $3) |
-| 4 | 다크모드 기본값 | Phase 0 Day 5 | 시스템 따름 / 라이트 / 다크 |
+| ~~4~~ | ~~다크모드 기본값~~ | ✅ Day 5 결정 — **라이트 기본**, prefers-color-scheme 자동 추적 안 함, 명시적 토글로만 다크 전환, localStorage `theme` 키에 사용자 선택 보존 |
 
 ---
 
@@ -359,27 +361,27 @@ supabase        ^2.98.1
 
 ---
 
-## 10. 다음 즉시 액션 (Day 3 진입)
+## 10. 다음 즉시 액션 (Phase 1 진입)
 
-Phase 0 Day 2는 완료 커밋·푸시까지 마쳤음. 다음 세션부터는 Day 3 작업으로 진입.
+Phase 0 전체 완료 (Day 1~5). 다음은 **Phase 1 — Agent 호출 골격 + 첫 Agent (하영)**.
 
 ```
-[Day 3 우선순위]
-  1. Drizzle 스키마 재검토 + 시드 데이터 보완
-     - schema.ts 26개 테이블 도메인별 일관성 점검
-     - 누락된 인덱스/제약조건 추가
-     - lib/agents/definitions.ts 시스템 프롬프트 1차 다듬기
-  2. Day 2에서 발견된 잠재 이슈 정리
-     - drizzle-kit push --force 정책 (또는 strict 토글) 결정해 npm scripts 반영
-     - lib/db/seed.ts dotenv 호이스팅 버그 수정 (client.ts에서 dotenv 로드 권장)
-  3. (선택) Day 4 사전 준비
-     - Google Cloud Console에서 OAuth 클라이언트 ID/Secret 발급
-     - Authorized redirect URI: http://localhost:54321/auth/v1/callback (로컬 supabase)
+[Phase 1 Week 2]
+  1. lib/anthropic/client.ts — Anthropic SDK 래퍼 (모델 라우팅 sonnet/haiku)
+     - prompt caching 적용 (시스템 프롬프트 + tool defs 캐시)
+  2. /api/agents/[name]/invoke 통일 라우트
+     - agents 테이블 조회 → 모델·프롬프트·권한 적용
+     - 호출 직후 agent_logs 자동 insert (input/output tokens, cost, duration, error)
+  3. lib/agents/guard.ts
+     - 일·월 비용 한도 검사 (agents.daily_cost_limit_usd / monthly_cost_limit_usd)
+     - 5연속 오류 시 agents.is_active=false + is_paused_reason 기록
+  4. 하영(today_manager) 1차 시스템 프롬프트 정밀화 + Todo CRUD tool
+     - tool: create_todo / update_todo / list_todos_due_today / classify_todo
+  5. AgentBadge 컴포넌트 (영문명 → --agent-{englishName} 컬러 토큰)
+  6. /today 페이지 → 하영 호출 + Todo 그리드
 
-[Day 4]
-  - Supabase Auth Google OAuth 연결 + ALLOWED_EMAIL 화이트리스트
-  - middleware.ts에서 세션 검사 + 로그인 페이지 라우팅
-
-[Day 5]
-  - 사이드바 11개 메뉴 + 헤더 ⌘K + 플로팅 채팅 골격 + 다크모드 토글
+[Phase 1 진입 전 결정/액션]
+  - 민지 비용 상한선 (#3 미결정) — 일 $3 유지? $5? 월 $30 캡?
+  - Anthropic API key가 ANTHROPIC_API_KEY로 .env.local에 있는지 확인
+  - Google Cloud Console redirect URI 검증 (Day 4 사전 체크리스트)
 ```
