@@ -3,13 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "db:enable-extensions": "tsx lib/db/enable-extensions.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
+    "db:push:force": "drizzle-kit push --force",
     "db:studio": "drizzle-kit studio",
     "db:seed": "tsx lib/db/seed.ts"
   },

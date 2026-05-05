@@ -1,5 +1,7 @@
-import { config } from "dotenv";
-config({ path: ".env.local" });
+// 이 스크립트는 client.ts와 별개로 직접 postgres 연결을 만든다.
+// tsx 직접 실행 시 .env.local 자동 로드가 필요하므로 dotenv를 명시적으로 호출.
+import { config as loadDotenv } from "dotenv";
+loadDotenv({ path: ".env.local" });
 
 import postgres from "postgres";
 

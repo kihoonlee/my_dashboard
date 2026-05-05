@@ -1,6 +1,4 @@
-import { config } from "dotenv";
-config({ path: ".env.local" });
-
+// dotenv 로드는 ./client에서 이미 처리됨 (client.ts 상단 참고).
 import { db } from "./client";
 import { agents } from "./schema";
 import { AGENT_SEEDS } from "@/lib/agents/definitions";

@@ -298,12 +298,20 @@ supabase        ^2.98.1
 
 ### ❌ 미보유 (해당 Phase 진입 전 발급)
 
-| 자원 | 필요 시점 | 발급 위치 |
-|---|---|---|
-| Google OAuth 클라이언트 (Gmail + Calendar) | **Phase 0 Day 4** | console.cloud.google.com |
-| GitHub Webhook 시크릿 (옵시디언 vault) | Phase 3 Week 4 | repo Settings → Webhooks |
-| 옵시디언 vault private GitHub repo | Phase 3 Week 4 | github.com/new |
-| Vercel 계정 + (Pro 옵션) | Phase 7 Week 10 | vercel.com |
+| 자원 | 필요 시점 | 발급 위치 | 상태 |
+|---|---|---|---|
+| Google OAuth 클라이언트 (Auth + Gmail + Calendar) | **Phase 0 Day 4** | console.cloud.google.com | ✅ 발급 완료 (.env.local 저장, Day 4 진입 가능) |
+| GitHub Webhook 시크릿 (옵시디언 vault) | Phase 3 Week 4 | repo Settings → Webhooks | 미발급 |
+| 옵시디언 vault private GitHub repo | Phase 3 Week 4 | github.com/new | 미발급 |
+| Vercel 계정 + (Pro 옵션) | Phase 7 Week 10 | vercel.com | 미가입 |
+
+#### Google OAuth 사전 체크 (Day 4 진입 시 확인)
+
+- [ ] Google Cloud Console → Credentials → 해당 OAuth 클라이언트 → Authorized redirect URIs에 다음 등록 확인:
+  - `http://127.0.0.1:54321/auth/v1/callback` (로컬 Supabase Auth callback)
+  - `https://<production-ref>.supabase.co/auth/v1/callback` (Phase 7 진입 시 추가)
+- [ ] OAuth consent screen에서 필요한 scope 추가 — 최소 `openid email profile`, Gmail/Calendar 사용 시점에 추가 scope 확장
+- [ ] Test users 또는 Publishing status 확인 (개인 사용이라 External + Testing 모드 무방, 단 Test users에 powergenes@gmail.com 등록 필요)
 
 ---
 
