@@ -22,10 +22,10 @@
 |---|---|
 | **로컬 경로 (현재)** | `/Users/kihoon_mac/work/mywork/my_dashboard` (Mac) |
 | **로컬 경로 (Windows, 참고)** | `D:\test\kihoon_dashboard` |
-| **리모트** | `git@github.com:kihoonlee/my_dashboard.git` (Mac은 default SSH key 사용) |
+| **리모트 (alias)** | `git@github-kihoonlee:kihoonlee/my_dashboard.git` (PC별 SSH alias 사용) |
 | **GitHub URL** | https://github.com/kihoonlee/my_dashboard |
 | **Default branch** | `master` |
-| **사용자** | `kihoonlee <powergenes@gmail.com>` |
+| **사용자** | `kihoon <powergenes@gmail.com>` (Mac global git config) |
 
 ### 커밋 히스토리
 
@@ -36,13 +36,18 @@ e2588fb  docs: add progress.md (project status snapshot)
 9c11e96  Initial commit from Create Next App
 ```
 
-### SSH 다중 계정 (PC별 차이)
+### SSH 다중 계정 (Mac / Windows 공통 패턴)
 
-- **Windows PC**: `~/.ssh/config`에 `github.com → home_flow` / `github-kihoonlee → kihoonlee_pc` 분리 alias.
-  Windows에서 push할 때만 remote URL이 `git@github-kihoonlee:kihoonlee/my_dashboard.git` 형식이어야 함.
-- **Mac**: 기본 SSH key가 kihoonlee 계정과 연결됨. Remote URL은 표준 `git@github.com:kihoonlee/my_dashboard.git` 그대로 사용.
+이 사용자는 **회사 계정과 개인 계정 SSH 키를 분리** 운영하며, default `github.com`은 회사 계정에 매핑되어 있음. 따라서 개인 repo는 **반드시 SSH alias**를 통해야 push/pull 가능.
 
-따라서 progress.md의 remote URL 표기는 PC에 따라 다르며, GitHub 측 repo는 동일.
+| 환경 | `~/.ssh/config` alias | 개인 키 | 회사 키 |
+|---|---|---|---|
+| **Mac** | `github-kihoonlee` → `~/.ssh/mac_ssh` | `mac_ssh` | `macmini_flow` (default `github.com`) |
+| **Windows** | `github-kihoonlee` → `~/.ssh/kihoonlee_pc` | `kihoonlee_pc` | `home_flow` (default `github.com`) |
+
+이 repo의 정확한 remote URL: `git@github-kihoonlee:kihoonlee/my_dashboard.git` (Mac/Windows 공통).
+
+**처음에 잘못 clone(`git@github.com:...` 표준 형식)했을 때 권한 거부됨** — 그 경우 `git remote set-url origin git@github-kihoonlee:kihoonlee/my_dashboard.git`로 즉시 정정 필요.
 
 ---
 
