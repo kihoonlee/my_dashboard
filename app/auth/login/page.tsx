@@ -17,9 +17,11 @@ function LoginContent() {
   useEffect(() => {
     if (!code) return;
     setExchanging(true);
+    console.log("[auth/login fallback] exchanging code, document.cookie:", document.cookie);
     const supabase = createSupabaseBrowserClient();
     supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
       if (error) {
+        console.error("[auth/login fallback] exchange failed:", error.message);
         router.replace(
           `/auth/error?reason=exchange_failed&description=${encodeURIComponent(error.message)}`,
         );
@@ -30,8 +32,13 @@ function LoginContent() {
   }, [code, next, router]);
 
   async function handleGoogleSignIn() {
+    // next 라우트는 cookie로 전달 (Supabase의 redirect_to allowlist가 query string 매칭이 일관되지
+    // 않아, redirectTo는 정확히 /auth/callback 한 줄로 고정). cookie는 SameSite=Lax + path=/ 라
+    // OAuth 리다이렉트로 돌아올 때도 서버에 전달됨.
+    document.cookie = `auth_next=${encodeURIComponent(next)}; Path=/; Max-Age=600; SameSite=Lax`;
+
     const supabase = createSupabaseBrowserClient();
-    const redirectTo = `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`;
+    const redirectTo = `${window.location.origin}/auth/callback`;
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
@@ -47,7 +54,6 @@ function LoginContent() {
     });
 
     if (error) {
-      // 에러는 사용자에게 보여줘야 함 (개인 글로벌 규칙)
       alert(`Google 로그인 시작 실패: ${error.message}`);
     }
   }

@@ -2,12 +2,24 @@
 // 우리가 exchangeCodeForSession으로 세션 쿠키를 만든다.
 
 import { NextResponse, type NextRequest } from "next/server";
+import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/";
+
+  // next 라우트는 login 시 클라이언트가 cookie로 보냄 (?next= 쿼리는 Supabase wildcard 매칭
+  // 문제로 사용 안 함). 없으면 홈.
+  const cookieStore = await cookies();
+  const nextCookie = cookieStore.get("auth_next")?.value;
+  const next = nextCookie ? decodeURIComponent(nextCookie) : "/";
+
+  console.log("[auth/callback] code present:", !!code, "next:", next);
+  console.log(
+    "[auth/callback] cookies received:",
+    cookieStore.getAll().map((c) => c.name),
+  );
 
   // OAuth provider 측 에러 (사용자가 거부 등)
   const errorCode = searchParams.get("error");
@@ -31,12 +43,15 @@ export async function GET(request: NextRequest) {
   const { error } = await supabase.auth.exchangeCodeForSession(code);
 
   if (error) {
+    console.error("[auth/callback] exchange failed:", error.message);
     const url = new URL("/auth/error", origin);
     url.searchParams.set("reason", "exchange_failed");
     url.searchParams.set("description", error.message);
     return NextResponse.redirect(url);
   }
 
-  // 화이트리스트 검사는 proxy.ts가 매 요청마다 실행하므로 여기서는 단순 redirect.
-  return NextResponse.redirect(new URL(next, origin));
+  // 사용한 next cookie 정리
+  const response = NextResponse.redirect(new URL(next, origin));
+  response.cookies.delete("auth_next");
+  return response;
 }
