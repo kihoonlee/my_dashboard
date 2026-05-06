@@ -1,6 +1,6 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-05 23:30 (Phase 0 전체 완료 — Day 3 + 4 + 5 한 번에 마무리)**
+> 최종 업데이트: **2026-05-06 (Phase 2B 캘린더 1차 완료 — OAuth refresh token 암호화 저장 + Calendar sync + 하영 캘린더 tool)**
 > 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
 > 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md`
 
@@ -12,7 +12,7 @@
 
 - **유형**: 개인 프로젝트 (kihoonlee 계정)
 - **로드맵**: 10주 풀빌드 (기획서 그대로) + 11-12주 버퍼
-- **현재 위치**: **Phase 2A 완료** (민지 메인 채팅 + 혜원 홈 Hero + Agent 간 위임 ask_agent). Phase 2B(Calendar 동기화 / Realtime 스트리밍) 진입 가능.
+- **현재 위치**: **Phase 2B 캘린더 1차 완료** (OAuth refresh token pgcrypto 암호화 저장 + Calendar sync API + 하영 캘린더 tool 2개 + /today 캘린더 위젯). Phase 2B 잔여: Realtime 스트리밍, ⌘K, Cron.
 
 ---
 
@@ -190,10 +190,34 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 | `components/home-hero.tsx` | 혜원 종합 브리핑 위젯. 진입 시 자동 호출 안 함 (비용 보호) — 버튼 클릭 시 호출. |
 | `app/(app)/page.tsx` | 홈을 Phase 0 placeholder에서 운영 화면으로 갱신. AgentBadge 통일 사용 + Phase별 활성 표시. |
 
+### Phase 2B 캘린더 1차 — ✅ 완료
+
+| 항목 | 결과 |
+|---|---|
+| `oauth_tokens` 테이블 신설 (user_id × provider unique, encrypted_refresh_token text) | `lib/db/schema.ts` |
+| `OAUTH_TOKEN_KEY` 환경변수 + `.env.local` 자동 추가 (openssl rand -base64 48) | `.env.example`, `.env.local` |
+| pgcrypto column-level 암호화 (`pgp_sym_encrypt` + base64) | `lib/oauth/token-store.ts` (saveRefreshToken/loadRefreshToken/deleteRefreshToken) |
+| `app/auth/callback/route.ts`에서 `provider_refresh_token` 캡처 + 저장. 저장 실패해도 로그인 흐름은 유지. | `app/auth/callback/route.ts` |
+| `ensureUser` 헬퍼 분리 (chat route + callback + sync route 공유) | `lib/users/ensure.ts` |
+| Login에 `calendar.readonly` scope 추가 + `prompt=consent`로 refresh token 발급 강제 | `app/auth/login/page.tsx` |
+| Google API 헬퍼 (refresh + Events.list) + `GoogleAuthError(needsReauth)` | `lib/google/calendar.ts` |
+| `POST /api/sync/calendar` — 오늘+7일 윈도우 upsert, stale 정리, 412(reauth_required) 분기 | `app/api/sync/calendar/route.ts` |
+| `GET /api/calendar/agenda?days=1\|7` — UI용 캐시 read-only | `app/api/calendar/agenda/route.ts` |
+| 하영 tool 2개 추가: `list_events_today`, `list_events_week` (캐시만 읽음 — sync 안 함) | `lib/agents/tools/hayoung.ts` |
+| `/today` 캘린더 섹션: 동기화 버튼 + 일정 리스트 + 권한 만료 시 "다시 로그인" CTA | `app/(app)/today/page.tsx` |
+| `calendar_events_cache` startAt 인덱스 추가 | schema |
+| `next build` 통과 (14 라우트, 새 라우트 3개: agenda, sync/calendar, oauth_tokens 관련 흐름) | — |
+
+**진행 검증 잔여 (사용자 손 필요)**:
+1. Google Cloud Console OAuth 동의 화면에 `https://www.googleapis.com/auth/calendar.readonly` scope 추가 등록 (Test users 모드면 체크박스에 노출되도록).
+2. `npm run dev` → `/auth/login` 재로그인 (Calendar 동의 화면이 새로 떠야 함 — `prompt=consent` 덕분에 매 로그인 발급).
+3. `/today`에서 "동기화" 버튼 → `oauth_tokens`에 1행 생긴 후 `calendar_events_cache` 채워지는지.
+4. 하영에게 "오늘 일정 뭐 있어?" → `list_events_today` tool 호출 확인.
+
 ### Phase 2B 잔여 (다음)
-- Google Calendar 동기화 (OAuth scope 추가 + Refresh Token pgcrypto 암호화 + 5분 cron)
-- Supabase Realtime 응답 스트리밍 (현재는 동기 응답)
-- ⌘K 명령 팔레트 헤더 연결 (현재 placeholder)
+- 5분 cron으로 자동 sync (Phase 7 Vercel Cron과 함께 일괄 도입 — 단일 사용자 dev에서는 수동 트리거로도 충분).
+- Supabase Realtime 응답 스트리밍 (현재는 동기 응답).
+- ⌘K 명령 팔레트 헤더 연결 (현재 placeholder).
 
 ### Phase 3 (Week 4-5) — 지식 영역 (서연 + 다솜) + 옵시디언
 
@@ -378,23 +402,21 @@ supabase        ^2.98.1
 
 ---
 
-## 10. 다음 즉시 액션 (Phase 2B 진입)
+## 10. 다음 즉시 액션 (Phase 2B 잔여 → Phase 3 진입 준비)
 
-Phase 2A 완료 — 민지 채팅 + 혜원 Hero + Agent 위임 가동. 다음은 **Phase 2B — Calendar 동기화 + Realtime 스트리밍**.
+Phase 2B 캘린더 1차 완료. 다음 후보:
 
 ```
-[Phase 2B 잔여]
-  1. Google Calendar OAuth scope 추가
-     - app/auth/login/page.tsx: scopes에 https://www.googleapis.com/auth/calendar.readonly 추가
-     - 기존 로그인 사용자는 재로그인 또는 prompt=consent로 권한 갱신
-  2. Refresh Token 암호화 저장
-     - lib/crypto.ts (pgcrypto encrypt/decrypt 헬퍼) 또는 PostgreSQL 측 column-level 암호화
-     - users.settings_json 또는 별도 oauth_tokens 테이블 (스키마 결정 필요)
-  3. Calendar 동기화
-     - POST /api/sync/calendar (수동) + cron 5분
-     - calendar_events_cache 테이블 채우기 (오늘 + 7일 윈도우)
-  4. 하영에게 캘린더 tool 추가
-     - list_events_today / list_events_week
-  5. Supabase Realtime 스트리밍 (선택)
-     - chat_messages.insert를 Realtime broadcast로 → 채팅 UI에서 스트리밍 표시
+[Phase 2B 잔여 — 우선순위순]
+  A. Google Cloud Console OAuth 동의 화면 + Test users에 calendar.readonly scope 등록
+     → 등록 안 하면 sync 시 권한 오류. 사용자 손이 필요한 외부 작업.
+  B. 재로그인 + /today 동기화 smoke test
+     → oauth_tokens 1행 생성 + calendar_events_cache 채워지는지 + 하영 list_events_today 동작 확인
+  C. (선택) Supabase Realtime 응답 스트리밍 — 현재는 동기 응답이라 tool 사용 시 1-3초 침묵
+  D. (선택) ⌘K 명령 팔레트 (현재 placeholder)
+
+[Phase 3 진입 — Week 4]
+  1. 옵시디언 vault GitHub repo + private + webhook (HMAC SHA-256)
+  2. 임베딩 모델 결정 (Voyage-3 vs OpenAI text-embedding-3-small) — 미결정
+  3. 서연/다솜 도메인 tool + 시드 정밀화
 ```

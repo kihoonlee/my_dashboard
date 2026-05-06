@@ -26,6 +26,32 @@ export const users = pgTable("users", {
     .notNull(),
 });
 
+// OAuth provider별 refresh token 저장. encryptedRefreshToken은 pgcrypto
+// pgp_sym_encrypt 결과를 base64 인코딩해 text로 보관 — 평문 저장 금지.
+export const oauthTokens = pgTable(
+  "oauth_tokens",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    scope: text("scope").notNull().default(""),
+    encryptedRefreshToken: text("encrypted_refresh_token").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    lastRefreshedAt: timestamp("last_refreshed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    unique("oauth_tokens_user_provider_unique").on(t.userId, t.provider),
+  ],
+);
+
 // ============================================================
 // AGENTS & CHAT
 // ============================================================
@@ -208,19 +234,25 @@ export const todos = pgTable(
   ],
 );
 
-export const calendarEventsCache = pgTable("calendar_events_cache", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  googleEventId: text("google_event_id").notNull().unique(),
-  title: text("title").notNull(),
-  startAt: timestamp("start_at", { withTimezone: true }).notNull(),
-  endAt: timestamp("end_at", { withTimezone: true }).notNull(),
-  attendees: jsonb("attendees").default([]).notNull(),
-  location: text("location"),
-  rawJson: jsonb("raw_json").default({}).notNull(),
-  syncedAt: timestamp("synced_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+export const calendarEventsCache = pgTable(
+  "calendar_events_cache",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    googleEventId: text("google_event_id").notNull().unique(),
+    title: text("title").notNull(),
+    startAt: timestamp("start_at", { withTimezone: true }).notNull(),
+    endAt: timestamp("end_at", { withTimezone: true }).notNull(),
+    attendees: jsonb("attendees").default([]).notNull(),
+    location: text("location"),
+    rawJson: jsonb("raw_json").default({}).notNull(),
+    syncedAt: timestamp("synced_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("calendar_events_cache_start_idx").on(t.startAt),
+  ],
+);
 
 // ============================================================
 // GOALS & REVIEWS

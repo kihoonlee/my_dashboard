@@ -44,9 +44,11 @@ function LoginContent() {
       provider: "google",
       options: {
         redirectTo,
-        // Phase 2 Calendar / Phase 5 Gmail 진입 시 추가 scope 확장 예정
-        scopes: "openid email profile",
+        // Phase 2B: Calendar 읽기 권한. Phase 5에서 Gmail 추가 예정.
+        scopes:
+          "openid email profile https://www.googleapis.com/auth/calendar.readonly",
         queryParams: {
+          // refresh_token을 안정적으로 받기 위해 매 로그인 동의 강제
           access_type: "offline",
           prompt: "consent",
         },

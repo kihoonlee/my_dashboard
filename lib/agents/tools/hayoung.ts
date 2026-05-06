@@ -1,13 +1,13 @@
 // 하영(today_manager) 전용 tool 구현체.
-// Tool 정의 (schema)와 실행 함수를 한 파일에 둠 — Phase 1 범위에서는 4개 tool만:
-//   - create_todo: 신규 Todo 생성 + 자동 분류 (priority/projectId)
-//   - list_todos_today: 오늘 마감 + 미완료 Todo 조회
-//   - complete_todo: Todo 완료 처리
-//   - update_todo_due_date: 마감일 변경 (재스케줄링)
+// Tool 정의 (schema)와 실행 함수를 한 파일에 둠. Phase 2B에 캘린더 조회 2개 추가:
+//   Todo 4개:
+//   - create_todo, list_todos_today, complete_todo, update_todo_due_date
+//   Calendar 2개 (calendar_events_cache 읽기만 — sync는 별도 트리거):
+//   - list_events_today, list_events_week
 
 import { db } from "@/lib/db/client";
-import { todos } from "@/lib/db/schema";
-import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { calendarEventsCache, todos } from "@/lib/db/schema";
+import { and, asc, between, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import type { AgentTool } from "@/lib/anthropic/client";
 
 export const HAYOUNG_TOOLS: AgentTool[] = [
@@ -68,7 +68,56 @@ export const HAYOUNG_TOOLS: AgentTool[] = [
       required: ["todoId", "dueDate"],
     },
   },
+  {
+    name: "list_events_today",
+    description:
+      "오늘(00:00 ~ 23:59) 사용자의 캘린더 이벤트를 calendar_events_cache에서 시간순으로 반환한다. 캐시는 사용자가 /sync/calendar로 갱신했을 때만 최신 — 비어 있으면 사용자가 동기화 버튼을 누르도록 안내.",
+    input_schema: { type: "object", properties: {} },
+  },
+  {
+    name: "list_events_week",
+    description:
+      "오늘부터 +7일 윈도우의 이벤트를 시간순으로 반환한다. 시작 시각이 가까운 순.",
+    input_schema: { type: "object", properties: {} },
+  },
 ];
+
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function endOfToday(): Date {
+  const d = new Date();
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+function endOfWeekFromToday(): Date {
+  const d = new Date();
+  d.setDate(d.getDate() + 7);
+  d.setHours(23, 59, 59, 999);
+  return d;
+}
+
+async function listEventsBetween(start: Date, end: Date) {
+  const rows = await db
+    .select({
+      id: calendarEventsCache.id,
+      googleEventId: calendarEventsCache.googleEventId,
+      title: calendarEventsCache.title,
+      startAt: calendarEventsCache.startAt,
+      endAt: calendarEventsCache.endAt,
+      location: calendarEventsCache.location,
+      attendees: calendarEventsCache.attendees,
+      syncedAt: calendarEventsCache.syncedAt,
+    })
+    .from(calendarEventsCache)
+    .where(between(calendarEventsCache.startAt, start, end))
+    .orderBy(asc(calendarEventsCache.startAt));
+  return rows;
+}
 
 type ToolInput = Record<string, unknown>;
 
@@ -178,6 +227,27 @@ export async function runHayoungTool(
           });
         if (!updated) return { ok: false, error: `todo ${todoId} not found` };
         return { ok: true, result: updated };
+      }
+      case "list_events_today": {
+        const events = await listEventsBetween(startOfToday(), endOfToday());
+        return {
+          ok: true,
+          result: {
+            count: events.length,
+            events,
+            note:
+              events.length === 0
+                ? "캐시에 이벤트가 없습니다. 사용자에게 /today에서 '캘린더 동기화' 버튼을 눌러달라고 안내하세요."
+                : undefined,
+          },
+        };
+      }
+      case "list_events_week": {
+        const events = await listEventsBetween(
+          startOfToday(),
+          endOfWeekFromToday(),
+        );
+        return { ok: true, result: { count: events.length, events } };
       }
       default:
         return { ok: false, error: `unknown tool: ${name}` };

@@ -14,35 +14,10 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { db } from "@/lib/db/client";
-import { agents, chatMessages, chatSessions, users } from "@/lib/db/schema";
+import { agents, chatMessages, chatSessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-async function ensureUser(supabaseUser: {
-  id: string;
-  email?: string | null;
-  user_metadata?: { full_name?: string; name?: string } | null;
-}): Promise<string> {
-  // public.users.id를 supabase auth user id에 정렬. email unique 사용.
-  const email = supabaseUser.email ?? `${supabaseUser.id}@unknown.local`;
-  const name =
-    supabaseUser.user_metadata?.full_name ??
-    supabaseUser.user_metadata?.name ??
-    null;
-
-  const [existing] = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.email, email))
-    .limit(1);
-  if (existing) return existing.id;
-
-  const [created] = await db
-    .insert(users)
-    .values({ email, name })
-    .returning({ id: users.id });
-  return created.id;
-}
+import { ensureUser } from "@/lib/users/ensure";
 
 export async function POST(request: NextRequest) {
   // 1. body 파싱
