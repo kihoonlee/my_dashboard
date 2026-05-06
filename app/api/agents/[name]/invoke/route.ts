@@ -21,32 +21,65 @@ import { invokeAgent, type AgentTool } from "@/lib/anthropic/client";
 import { calculateCostUsd } from "@/lib/anthropic/pricing";
 import { checkAfterInvoke, checkBeforeInvoke } from "@/lib/agents/guard";
 import { HAYOUNG_TOOLS, runHayoungTool } from "@/lib/agents/tools/hayoung";
+import { makeAskAgentTool, runAskAgent } from "@/lib/agents/tools/shared";
 
 const MAX_ITERATIONS = 5;
 
 type AgentRow = typeof agents.$inferSelect;
+type ToolPerms = {
+  data_read?: string[];
+  data_write?: string[];
+  external_apis?: string[];
+  call_agents?: string[];
+};
+type ToolResult =
+  | { ok: true; result: unknown }
+  | { ok: false; error: string };
 
 /**
- * Agent englishName → tool definitions + tool runner 매핑.
- * Phase 1에서는 하영만. Phase 2+에서 혜원/민지/서연/다솜/현주/도연/민영/정연/수민 추가.
+ * Agent별 tool defs + 실행 함수.
+ * - 도메인 tool: agent 고유 (하영의 Todo CRUD 등)
+ * - ask_agent: agents.toolPermissions.call_agents 기반 동적 생성. 모든 agent에 부여.
  */
-function getAgentTools(englishName: string): {
+function getAgentTools(
+  englishName: string,
+  permissions: ToolPerms,
+  callerDepth: number,
+): {
   tools: AgentTool[];
-  runTool: (
+  runTool: (name: string, input: Record<string, unknown>) => Promise<ToolResult>;
+} {
+  // 1. 도메인 tools
+  let domainTools: AgentTool[] = [];
+  let runDomainTool: (
     name: string,
     input: Record<string, unknown>,
-  ) => Promise<{ ok: true; result: unknown } | { ok: false; error: string }>;
-} {
+  ) => Promise<ToolResult> = async () => ({
+    ok: false,
+    error: `agent ${englishName} has no domain tools`,
+  });
   if (englishName === "hayoung") {
-    return { tools: HAYOUNG_TOOLS, runTool: runHayoungTool };
+    domainTools = HAYOUNG_TOOLS;
+    runDomainTool = runHayoungTool;
   }
-  return {
-    tools: [],
-    runTool: async () => ({
-      ok: false,
-      error: `agent ${englishName} has no tools registered yet`,
-    }),
+
+  // 2. ask_agent (call_agents 권한이 있을 때만)
+  const callAgents = permissions.call_agents ?? [];
+  const askTool = makeAskAgentTool(callAgents);
+
+  const tools: AgentTool[] = askTool ? [...domainTools, askTool] : domainTools;
+
+  const runTool = async (
+    name: string,
+    input: Record<string, unknown>,
+  ): Promise<ToolResult> => {
+    if (name === "ask_agent") {
+      return await runAskAgent(englishName, callerDepth, input);
+    }
+    return await runDomainTool(name, input);
   };
+
+  return { tools, runTool };
 }
 
 /**
@@ -63,12 +96,27 @@ function renderSystemPrompt(template: string): string {
     );
 }
 
+// Agent → Agent 호출 깊이 제한 (무한 재귀 방지).
+// 민지(0) → 하영(1) → ... 최대 2까지만 허용.
+const MAX_AGENT_DEPTH = 2;
+const DEPTH_HEADER = "x-myhub-agent-depth";
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ name: string }> },
 ) {
   const { name } = await params;
   const startedAt = Date.now();
+
+  // 호출 깊이 검사 — 다른 agent의 ask_agent tool에서 invoke를 재귀 호출할 때 헤더로 전달
+  const depthHeader = request.headers.get(DEPTH_HEADER);
+  const depth = depthHeader ? parseInt(depthHeader, 10) : 0;
+  if (depth > MAX_AGENT_DEPTH) {
+    return NextResponse.json(
+      { error: "max_agent_depth_exceeded", depth },
+      { status: 400 },
+    );
+  }
 
   // 1. body 파싱
   let body: { message?: string; trigger?: string };
@@ -109,7 +157,11 @@ export async function POST(
   }
 
   // 4. tool defs + runner
-  const { tools, runTool } = getAgentTools(name);
+  const { tools, runTool } = getAgentTools(
+    name,
+    (agent.toolPermissions as ToolPerms) ?? {},
+    depth,
+  );
   const systemPrompt = renderSystemPrompt(agent.systemPrompt);
   const messages: Anthropic.MessageParam[] = [
     { role: "user", content: userMessage },

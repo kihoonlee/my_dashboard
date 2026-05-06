@@ -12,7 +12,7 @@
 
 - **유형**: 개인 프로젝트 (kihoonlee 계정)
 - **로드맵**: 10주 풀빌드 (기획서 그대로) + 11-12주 버퍼
-- **현재 위치**: **Phase 1 완료** (하영 첫 Agent 라이브). Phase 2 진입 가능.
+- **현재 위치**: **Phase 2A 완료** (민지 메인 채팅 + 혜원 홈 Hero + Agent 간 위임 ask_agent). Phase 2B(Calendar 동기화 / Realtime 스트리밍) 진입 가능.
 
 ---
 
@@ -175,15 +175,25 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 | `app/api/todos/today/route.ts` + `[id]/complete/route.ts` | UI에서 LLM 안 거치는 직접 경로 |
 | 빌드 검증 | next build 성공, 10 라우트 + Proxy 등록 |
 
-### Phase 2 (Week 3) — 채팅(민지) + 혜원 + Calendar
+### Phase 2A (Week 3) — ✅ 민지 메인 채팅 + 혜원 종합 브리핑
 
-> 기획서 대비 조정: 민지를 Week 9 → Week 3로 앞당김 (사용자가 첫 도메인에 채팅 포함 원함). 처음엔 하영·혜원만 호출 가능, 점진 확장.
+| 항목 | 결과 |
+|---|---|
+| `lib/agents/tools/shared.ts` | `ask_agent` 공통 tool. `agents.toolPermissions.call_agents` 화이트리스트 기반 동적 schema 생성 + 권한 검사 + 자기 호출 차단. |
+| `app/api/agents/[name]/invoke/route.ts` 보강 | 호출 깊이 헤더 (`x-myhub-agent-depth`, max 2) + 내부 호출 표시 (`x-myhub-internal-call`) |
+| `proxy.ts` | 내부 agent 호출(`/api/agents/*` + 위 두 헤더)은 인증 우회. 외부 위조 방지를 위해 두 헤더 모두 필요. |
+| 혜원/민지 systemPrompt 정밀화 | 도구 사용 가이드 + 행동 규칙. Phase 2 활성 agent(hayoung, hyewon) 명시 + 나머지는 "tools 미등록" 안내. |
+| `/api/chat/route.ts` | 민지 메인 엔드포인트. `chat_sessions` / `chat_messages` 영속화. Supabase auth user → public.users 매핑(ensureUser). |
+| `/api/chat/sessions/[id]/messages/route.ts` | 세션 진입 시 메시지 히스토리 로드 (agent englishName JOIN). |
+| `app/(app)/chat/page.tsx` | 민지 채팅 UI. URL ?session=... 으로 세션 재진입. 자동 스크롤 + 메타 표시. |
+| `components/floating-chat-button.tsx` | placeholder alert 제거 → `Link href="/chat"`. /chat 페이지에선 자기 자신 숨김. |
+| `components/home-hero.tsx` | 혜원 종합 브리핑 위젯. 진입 시 자동 호출 안 함 (비용 보호) — 버튼 클릭 시 호출. |
+| `app/(app)/page.tsx` | 홈을 Phase 0 placeholder에서 운영 화면으로 갱신. AgentBadge 통일 사용 + Phase별 활성 표시. |
 
-- 혜원 시스템 프롬프트 + 홈 Hero
-- **민지 메인 엔드포인트** (`/api/chat/route.ts`) — Anthropic tool use 다단계 루프
-- 채팅 페이지 `/chat` + 플로팅 모달 + ⌘K 명령 팔레트
-- Google Calendar 동기화 + Refresh Token pgcrypto 암호화 저장
-- Supabase Realtime 응답 스트리밍
+### Phase 2B 잔여 (다음)
+- Google Calendar 동기화 (OAuth scope 추가 + Refresh Token pgcrypto 암호화 + 5분 cron)
+- Supabase Realtime 응답 스트리밍 (현재는 동기 응답)
+- ⌘K 명령 팔레트 헤더 연결 (현재 placeholder)
 
 ### Phase 3 (Week 4-5) — 지식 영역 (서연 + 다솜) + 옵시디언
 
@@ -368,24 +378,23 @@ supabase        ^2.98.1
 
 ---
 
-## 10. 다음 즉시 액션 (Phase 2 진입)
+## 10. 다음 즉시 액션 (Phase 2B 진입)
 
-Phase 1 완료 — 하영 라이브 동작 검증 완료. 다음은 **Phase 2 — 채팅(민지) + 혜원 + Calendar**.
+Phase 2A 완료 — 민지 채팅 + 혜원 Hero + Agent 위임 가동. 다음은 **Phase 2B — Calendar 동기화 + Realtime 스트리밍**.
 
 ```
-[Phase 2 Week 3]
-  1. 혜원 시스템 프롬프트 정밀화 + 홈 Hero 위젯
-  2. /api/chat/route.ts — 민지 메인 엔드포인트 (Anthropic tool use 다단계 루프)
-     - tool: ask_hayoung (Phase 1 라우트 호출 위임)
-     - 처음엔 하영·혜원만 호출 가능, 점진 확장
-     - max_iterations=5 + 동일 tool 2회 호출 가드 (Phase 1과 동일)
-  3. /chat 페이지 + 플로팅 모달 + ⌘K 명령 팔레트 연결
-  4. Google Calendar 동기화 + Refresh Token pgcrypto 암호화 저장
-  5. Supabase Realtime 응답 스트리밍
-
-[Phase 2 진입 전 결정/액션]
-  ✅ 민지 비용 상한선: 일 $3 / 월 $90 (시드값 그대로 확정)
-  - Calendar API scope 추가 → Google Cloud Console에서 OAuth scope 갱신
-    (식별자 문자열, 브라우저로 여는 URL 아님):
-    https://www.googleapis.com/auth/calendar.readonly
+[Phase 2B 잔여]
+  1. Google Calendar OAuth scope 추가
+     - app/auth/login/page.tsx: scopes에 https://www.googleapis.com/auth/calendar.readonly 추가
+     - 기존 로그인 사용자는 재로그인 또는 prompt=consent로 권한 갱신
+  2. Refresh Token 암호화 저장
+     - lib/crypto.ts (pgcrypto encrypt/decrypt 헬퍼) 또는 PostgreSQL 측 column-level 암호화
+     - users.settings_json 또는 별도 oauth_tokens 테이블 (스키마 결정 필요)
+  3. Calendar 동기화
+     - POST /api/sync/calendar (수동) + cron 5분
+     - calendar_events_cache 테이블 채우기 (오늘 + 7일 윈도우)
+  4. 하영에게 캘린더 tool 추가
+     - list_events_today / list_events_week
+  5. Supabase Realtime 스트리밍 (선택)
+     - chat_messages.insert를 Realtime broadcast로 → 채팅 UI에서 스트리밍 표시
 ```

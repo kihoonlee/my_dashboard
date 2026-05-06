@@ -1,24 +1,29 @@
 "use client";
 
-// Phase 0 Day 5 — 플로팅 채팅 버튼 골격. Phase 2에서 민지 채팅 모달과 연결.
+// Phase 2 — 플로팅 채팅 버튼. /chat 페이지로 이동.
+// 추후 Phase 2 후반에 모달 형식으로 변경 예정 (현재는 페이지 네비게이션이 더 단순).
 
 import { MessageCircle } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function FloatingChatButton() {
-  function handleClick() {
-    alert("민지 채팅은 Phase 2에서 활성화됩니다.");
-  }
+  const pathname = usePathname();
+  // /chat 페이지에선 자기 자신이라 숨김
+  if (pathname === "/chat") return null;
 
   return (
-    <button
-      onClick={handleClick}
-      type="button"
-      aria-label="민지 채팅 열기"
-      title="민지 (Phase 2 활성화 예정)"
-      className="fixed bottom-6 right-6 z-40 inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/25 hover:bg-primary/90 transition-colors active:translate-y-px"
-      style={{ backgroundColor: "var(--agent-minji)" }}
+    <Link
+      href="/chat"
+      aria-label="민지에게 물어보기"
+      title="민지에게 물어보기"
+      className="fixed bottom-6 right-6 z-40 inline-flex items-center justify-center w-12 h-12 rounded-full text-white shadow-lg hover:opacity-90 transition-opacity active:translate-y-px"
+      style={{
+        backgroundColor: "var(--agent-minji)",
+        boxShadow: "0 8px 16px -4px rgba(92, 124, 250, 0.35)",
+      }}
     >
       <MessageCircle className="h-5 w-5" />
-    </button>
+    </Link>
   );
 }

@@ -43,8 +43,15 @@ export async function proxy(request: NextRequest) {
     (p) => pathname === p || pathname.startsWith(p + "/"),
   );
 
-  // 인증 안 됨 → 로그인 페이지로 (public path 제외)
-  if (!user && !isPublic) {
+  // Agent 간 내부 호출 (ask_agent tool → /api/agents/[name]/invoke)은 인증 우회.
+  // 외부에서 위조하지 못하도록 깊이 헤더 + internal 표시 둘 다 검사.
+  const isInternalAgentCall =
+    pathname.startsWith("/api/agents/") &&
+    request.headers.get("x-myhub-internal-call") === "1" &&
+    request.headers.has("x-myhub-agent-depth");
+
+  // 인증 안 됨 → 로그인 페이지로 (public path 또는 내부 agent 호출 제외)
+  if (!user && !isPublic && !isInternalAgentCall) {
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/auth/login";
     loginUrl.searchParams.set("next", pathname);
