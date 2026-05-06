@@ -330,7 +330,7 @@ supabase        ^2.98.1
 |---|---|---|---|
 | 1 | Vercel Pro 가입 의향 ($20/월) | Phase 7 진입 전 | Hobby Cron 한도 초과. 외부 cron(cron-job.org) 대안 가능 |
 | 2 | 임베딩 모델 | Phase 3 진입 전 | Voyage-3(한국어 강함) vs OpenAI text-embedding-3-small(저렴) |
-| 3 | 민지 비용 상한선 | Phase 1 셋업 시 | 일 $5? 월 $30? (현재 시드는 일 $3) |
+| ~~3~~ | ~~민지 비용 상한선~~ | ✅ Phase 2 진입 전 결정 — **일 $3 / 월 $90**. 시드(`definitions.ts`) 그대로 사용. |
 | ~~4~~ | ~~다크모드 기본값~~ | ✅ Day 5 결정 — **라이트 기본**, prefers-color-scheme 자동 추적 안 함, 명시적 토글로만 다크 전환, localStorage `theme` 키에 사용자 선택 보존 |
 
 ---
@@ -384,6 +384,8 @@ Phase 1 완료 — 하영 라이브 동작 검증 완료. 다음은 **Phase 2 �
   5. Supabase Realtime 응답 스트리밍
 
 [Phase 2 진입 전 결정/액션]
-  - 민지 비용 상한선 결정 (현재 시드 일 $3, 월 미정) — 메인 엔드포인트라 가장 호출량 많음
+  ✅ 민지 비용 상한선: 일 $3 / 월 $90 (시드값 그대로 확정)
   - Calendar API scope 추가 → Google Cloud Console에서 OAuth scope 갱신
+    (식별자 문자열, 브라우저로 여는 URL 아님):
+    https://www.googleapis.com/auth/calendar.readonly
 ```
