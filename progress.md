@@ -238,8 +238,17 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 | `/chat` (민지) UI: 송신 직후 빈 assistant 메시지 push → `delta`마다 누적 + tool 호출 칩(running/ok/error 상태) + `done`에서 meta. | app/(app)/chat/page.tsx |
 | `/today` (하영) UI: 동일 패턴. tool 사용 후 Todo/Calendar 자동 새로고침. | app/(app)/today/page.tsx |
 
+### Phase 2B ⌘K 명령 팔레트 — ✅ 완료
+
+| 항목 | 결과 |
+|---|---|
+| `components/command-palette.tsx` — `CommandPaletteProvider` (전역 ⌘K/Ctrl+K listener) + `CommandPaletteModal` (검색 + 그룹 리스트 + 키보드 navigation) + `useCommandPalette` hook | command-palette.tsx |
+| 명령 8개 (정적, 점진 확장 예정): 홈/오늘/민지 채팅 이동, 새 대화 시작, 캘린더 동기화(인라인 피드백), 다크/라이트 토글, 로그아웃 | 동상 |
+| `components/header.tsx` placeholder alert 제거 → `useCommandPalette().open()` 연결 | header.tsx |
+| `app/(app)/layout.tsx`에 `CommandPaletteProvider` 마운트 (인증된 셸 전체에서 사용 가능) | (app)/layout.tsx |
+
 ### Phase 2B 잔여 (다음 후보)
-- ⌘K 명령 팔레트 헤더 연결 (현재 placeholder).
+- (현시점 모두 완료 — Phase 3 옵시디언 진입 가능)
 
 ### Phase 3 (Week 4-5) — 지식 영역 (서연 + 다솜) + 옵시디언
 

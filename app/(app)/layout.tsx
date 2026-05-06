@@ -4,18 +4,21 @@
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { FloatingChatButton } from "@/components/floating-chat-button";
+import { CommandPaletteProvider } from "@/components/command-palette";
 
 export default function AppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <div className="flex flex-1 min-h-svh">
-      <Sidebar />
-      <div className="flex flex-1 flex-col min-w-0">
-        <Header />
-        <main className="flex-1 overflow-y-auto">{children}</main>
+    <CommandPaletteProvider>
+      <div className="flex flex-1 min-h-svh">
+        <Sidebar />
+        <div className="flex flex-1 flex-col min-w-0">
+          <Header />
+          <main className="flex-1 overflow-y-auto">{children}</main>
+        </div>
+        <FloatingChatButton />
       </div>
-      <FloatingChatButton />
-    </div>
+    </CommandPaletteProvider>
   );
 }
