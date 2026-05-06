@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Tailwind v4** + shadcn/ui (neutral) + Pretendard Variable + tw-animate-css. 토큰은 `app/globals.css`에 CSS 변수 (Toss Blue `#3182F6` primary + 10명 Agent별 `--agent-*` 컬러).
 - **Drizzle ORM** + `postgres-js`. 단일 사용자 dev에선 로컬 Supabase Postgres 직접 연결 (`postgresql://postgres:postgres@127.0.0.1:54322/postgres`).
 - **Supabase** (`@supabase/ssr`, `@supabase/supabase-js`, supabase CLI dev dep). 로컬 dev는 `npm run supabase:start` (Docker 필요).
-- **Anthropic SDK** (`@anthropic-ai/sdk` 0.93.x). 시드의 모델 ID 사용: `claude-sonnet-4-6` (혜원·민지·수민·현주) / `claude-haiku-4-5-20251001` (하영·서연·다솜·도연·민영·정연). `lib/anthropic/client.ts` 통해서만 호출.
+- **Anthropic SDK** (`@anthropic-ai/sdk` 0.93.x). 시드의 모델 ID 사용: `claude-sonnet-4-6` (혜원·민지·수민·현주) / `claude-haiku-4-5-20251001` (하영·서연·다솜·도연·민영·정연). `lib/anthropic/client.ts` 통해서만 호출 (`invokeAgent` JSON / `streamAgent` SSE).
 
 ## Commands
 
@@ -68,15 +68,17 @@ npm run db:studio
 **Agent 호출 골격** (`app/api/agents/[name]/invoke/route.ts`):
 1. depth 헤더 검사(max 2) + agent 조회 + guard
 2. tool defs = 도메인 tools + (call_agents 권한 있으면) ask_agent
-3. invokeAgent — system prompt에 `{user_name}` `{current_time}` 치환
-4. tool_use 루프 (max 5 iter, 동일 tool·동일 인자 2회 안티-루프)
-5. agent_logs.insert (tokens / cost / duration / error)
-6. checkAfterInvoke
+3. `Accept: text/event-stream`이면 SSE 모드 (`streamAgent` + tool-loop 토큰 stream), 그 외 JSON 모드 (`invokeAgent`)
+4. system prompt에 `{user_name}` `{current_time}` 치환
+5. tool_use 루프 (max 5 iter, 동일 tool·동일 인자 2회 안티-루프)
+6. agent_logs.insert (tokens / cost / duration / error)
+7. checkAfterInvoke
+- SSE 이벤트: `iteration` / `delta` / `tool_call` / `tool_result` / `done` / `error`. ask_agent(server-to-server)는 Accept 헤더 안 보내 자동으로 JSON.
 
 **민지 메인 채팅** (`app/api/chat/route.ts` + `app/(app)/chat/page.tsx`):
-- ensureUser로 supabase auth user → public.users 매핑.
-- chat_sessions 신규/재사용 + chat_messages.insert(role=user) + 내부 fetch /api/agents/minji/invoke + chat_messages.insert(role=assistant, agentId=민지). lastMessageAt 갱신.
+- SSE 스트리밍. ensureUser → chat_sessions 신규/재사용 → user 메시지 insert → invoke route에 Accept: text/event-stream으로 fetch → upstream 이벤트 forward (`session` 이벤트로 sessionId/userMessageId 추가, `done`만 가로채 chat_messages.insert + assistantMessageId 추가해 emit) → lastMessageAt 갱신.
 - URL `?session=<uuid>`로 세션 재진입 (히스토리 GET).
+- 클라이언트는 `lib/sse/client.ts`의 `streamSseFetch`로 처리. `/today`(하영)도 동일 패턴이지만 `chat_sessions` 비영속 (Phase 1 단순 채팅).
 
 **핵심 도메인 관계**
 - `agents` ↔ `agent_prompt_versions` (1:N, 버전 히스토리 + 롤백) / `agent_logs` (호출별 토큰·비용·에러)

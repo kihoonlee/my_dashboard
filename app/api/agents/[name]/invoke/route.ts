@@ -2,28 +2,38 @@
 // POST /api/agents/[name]/invoke
 // body: { message: string, trigger?: string }
 //
-// 흐름:
+// 두 응답 모드:
+//   - 기본 JSON (기존): 전체 응답 1번에 반환. 내부 호출(ask_agent), 백그라운드 작업용.
+//   - SSE (Accept: text/event-stream): 토큰 단위로 스트리밍. UI 채팅용.
+//     이벤트 종류 — iteration / delta / tool_call / tool_result / done / error
+//
+// 흐름은 동일:
 // 1. agents 테이블에서 englishName으로 agent config 조회
 // 2. lib/agents/guard.ts checkBeforeInvoke (활성/비용 한도)
-// 3. tool defs는 agent별 매핑 (Phase 1: 하영만)
-// 4. lib/anthropic/client.ts invokeAgent — prompt caching 적용
+// 3. tool defs는 agent별 매핑 (Phase 1: 하영만 도메인 tool, Phase 2부터 ask_agent)
+// 4. lib/anthropic/client.ts invokeAgent / streamAgent — prompt caching 적용
 // 5. tool_use 발생 시 max_iterations=5 루프 (동일 도구·동일 인자 2회면 중단)
 // 6. agent_logs.insert (input/output tokens, cost, duration, error)
 // 7. checkAfterInvoke (5연속 오류 시 자동 일시정지)
-// 8. 응답: { text, agentLogId, iterations, durationMs, costUsd }
 
 import { NextResponse, type NextRequest } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db/client";
 import { agents, agentLogs } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { invokeAgent, type AgentTool } from "@/lib/anthropic/client";
+import {
+  invokeAgent,
+  streamAgent,
+  type AgentTool,
+} from "@/lib/anthropic/client";
 import { calculateCostUsd } from "@/lib/anthropic/pricing";
 import { checkAfterInvoke, checkBeforeInvoke } from "@/lib/agents/guard";
 import { HAYOUNG_TOOLS, runHayoungTool } from "@/lib/agents/tools/hayoung";
 import { makeAskAgentTool, runAskAgent } from "@/lib/agents/tools/shared";
 
 const MAX_ITERATIONS = 5;
+const MAX_AGENT_DEPTH = 2;
+const DEPTH_HEADER = "x-myhub-agent-depth";
 
 type AgentRow = typeof agents.$inferSelect;
 type ToolPerms = {
@@ -36,11 +46,13 @@ type ToolResult =
   | { ok: true; result: unknown }
   | { ok: false; error: string };
 
-/**
- * Agent별 tool defs + 실행 함수.
- * - 도메인 tool: agent 고유 (하영의 Todo CRUD 등)
- * - ask_agent: agents.toolPermissions.call_agents 기반 동적 생성. 모든 agent에 부여.
- */
+type Usage = {
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+};
+
 function getAgentTools(
   englishName: string,
   permissions: ToolPerms,
@@ -49,7 +61,6 @@ function getAgentTools(
   tools: AgentTool[];
   runTool: (name: string, input: Record<string, unknown>) => Promise<ToolResult>;
 } {
-  // 1. 도메인 tools
   let domainTools: AgentTool[] = [];
   let runDomainTool: (
     name: string,
@@ -63,7 +74,6 @@ function getAgentTools(
     runDomainTool = runHayoungTool;
   }
 
-  // 2. ask_agent (call_agents 권한이 있을 때만)
   const callAgents = permissions.call_agents ?? [];
   const askTool = makeAskAgentTool(callAgents);
 
@@ -82,10 +92,6 @@ function getAgentTools(
   return { tools, runTool };
 }
 
-/**
- * 시스템 프롬프트의 placeholder 치환. {user_name} / {current_time}.
- * Phase 0~1에서 user_name은 하드코딩 ('지훈'), Phase 2+에서 세션 user 연결.
- */
 function renderSystemPrompt(template: string): string {
   const now = new Date();
   return template
@@ -96,86 +102,69 @@ function renderSystemPrompt(template: string): string {
     );
 }
 
-// Agent → Agent 호출 깊이 제한 (무한 재귀 방지).
-// 민지(0) → 하영(1) → ... 최대 2까지만 허용.
-const MAX_AGENT_DEPTH = 2;
-const DEPTH_HEADER = "x-myhub-agent-depth";
+function extractText(content: Anthropic.ContentBlock[]): string {
+  return content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n");
+}
 
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ name: string }> },
-) {
-  const { name } = await params;
+async function logAgentResult(
+  agentId: string,
+  trigger: string,
+  totalUsage: Usage,
+  durationMs: number,
+  costUsd: number,
+  isError: boolean,
+  errorMessage: string | null,
+): Promise<string | undefined> {
+  const [logRow] = await db
+    .insert(agentLogs)
+    .values({
+      agentId,
+      trigger,
+      inputTokens: totalUsage.input_tokens,
+      outputTokens: totalUsage.output_tokens,
+      durationMs,
+      costUsd: costUsd.toFixed(6),
+      isError,
+      errorMessage,
+    })
+    .returning({ id: agentLogs.id });
+  await checkAfterInvoke(agentId);
+  return logRow?.id;
+}
+
+// ───────────────────────────────────────────────────────────
+// JSON 모드 (기존 흐름)
+// ───────────────────────────────────────────────────────────
+async function runJsonMode(opts: {
+  agent: AgentRow;
+  systemPrompt: string;
+  tools: AgentTool[];
+  runTool: (
+    name: string,
+    input: Record<string, unknown>,
+  ) => Promise<ToolResult>;
+  userMessage: string;
+  trigger: string;
+}): Promise<NextResponse> {
+  const { agent, systemPrompt, tools, runTool, userMessage, trigger } = opts;
   const startedAt = Date.now();
-
-  // 호출 깊이 검사 — 다른 agent의 ask_agent tool에서 invoke를 재귀 호출할 때 헤더로 전달
-  const depthHeader = request.headers.get(DEPTH_HEADER);
-  const depth = depthHeader ? parseInt(depthHeader, 10) : 0;
-  if (depth > MAX_AGENT_DEPTH) {
-    return NextResponse.json(
-      { error: "max_agent_depth_exceeded", depth },
-      { status: 400 },
-    );
-  }
-
-  // 1. body 파싱
-  let body: { message?: string; trigger?: string };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json(
-      { error: "invalid_json" },
-      { status: 400 },
-    );
-  }
-  const userMessage = body.message?.trim();
-  if (!userMessage) {
-    return NextResponse.json(
-      { error: "message is required" },
-      { status: 400 },
-    );
-  }
-  const trigger = body.trigger ?? "manual";
-
-  // 2. agent 조회
-  const [agent] = (await db
-    .select()
-    .from(agents)
-    .where(eq(agents.englishName, name))
-    .limit(1)) as AgentRow[];
-  if (!agent) {
-    return NextResponse.json({ error: "agent_not_found" }, { status: 404 });
-  }
-
-  // 3. 가드 (활성 + 비용 한도)
-  const guard = await checkBeforeInvoke(agent.id);
-  if (!guard.ok) {
-    return NextResponse.json(
-      { error: guard.reason },
-      { status: guard.status },
-    );
-  }
-
-  // 4. tool defs + runner
-  const { tools, runTool } = getAgentTools(
-    name,
-    (agent.toolPermissions as ToolPerms) ?? {},
-    depth,
-  );
-  const systemPrompt = renderSystemPrompt(agent.systemPrompt);
   const messages: Anthropic.MessageParam[] = [
     { role: "user", content: userMessage },
   ];
 
+  const totalUsage: Usage = {
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 0,
+  };
   let iterations = 0;
-  let totalInputTokens = 0;
-  let totalOutputTokens = 0;
-  let totalCacheCreate = 0;
-  let totalCacheRead = 0;
   let lastResponse: Anthropic.Message | null = null;
   let isError = false;
   let errorMessage: string | null = null;
-  // 동일 도구 + 동일 인자 2회 호출 시 중단 (claude-api skill 권장 안티-루프)
   const seenToolCalls = new Set<string>();
 
   try {
@@ -185,33 +174,29 @@ export async function POST(
         model: agent.model,
         systemPrompt,
         maxTokens: agent.maxTokens,
-        temperature: agent.temperature
-          ? parseFloat(agent.temperature)
-          : undefined,
+        temperature: agent.temperature ? parseFloat(agent.temperature) : undefined,
         messages,
         tools,
         cacheSystemAndTools: true,
       });
       lastResponse = response;
 
-      totalInputTokens += response.usage.input_tokens;
-      totalOutputTokens += response.usage.output_tokens;
-      totalCacheCreate += response.usage.cache_creation_input_tokens ?? 0;
-      totalCacheRead += response.usage.cache_read_input_tokens ?? 0;
+      totalUsage.input_tokens += response.usage.input_tokens;
+      totalUsage.output_tokens += response.usage.output_tokens;
+      totalUsage.cache_creation_input_tokens +=
+        response.usage.cache_creation_input_tokens ?? 0;
+      totalUsage.cache_read_input_tokens +=
+        response.usage.cache_read_input_tokens ?? 0;
 
-      // tool_use 블록 추출
       const toolUseBlocks = response.content.filter(
         (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
       );
-
       if (response.stop_reason !== "tool_use" || toolUseBlocks.length === 0) {
-        break; // 종료
+        break;
       }
 
-      // assistant turn 보관 (다음 user turn에서 tool_result 첨부)
       messages.push({ role: "assistant", content: response.content });
 
-      // 각 tool 실행
       const toolResults: Anthropic.ToolResultBlockParam[] = [];
       for (const tu of toolUseBlocks) {
         const sig = `${tu.name}:${JSON.stringify(tu.input)}`;
@@ -249,68 +234,307 @@ export async function POST(
   } catch (e) {
     isError = true;
     errorMessage = e instanceof Error ? e.message : String(e);
-    console.error(`[agent:${name}] invoke failed:`, errorMessage);
+    console.error(`[agent:${agent.englishName}] invoke failed:`, errorMessage);
   }
 
-  // 5. 비용 계산 + agent_logs.insert
   const durationMs = Date.now() - startedAt;
-  const costUsd = lastResponse
-    ? calculateCostUsd(agent.model, {
-        input_tokens: totalInputTokens,
-        output_tokens: totalOutputTokens,
-        cache_creation_input_tokens: totalCacheCreate,
-        cache_read_input_tokens: totalCacheRead,
-      })
-    : 0;
+  const costUsd = lastResponse ? calculateCostUsd(agent.model, totalUsage) : 0;
+  const agentLogId = await logAgentResult(
+    agent.id,
+    trigger,
+    totalUsage,
+    durationMs,
+    costUsd,
+    isError,
+    errorMessage,
+  );
 
-  const [logRow] = await db
-    .insert(agentLogs)
-    .values({
-      agentId: agent.id,
-      trigger,
-      inputTokens: totalInputTokens,
-      outputTokens: totalOutputTokens,
-      durationMs,
-      costUsd: costUsd.toFixed(6),
-      isError,
-      errorMessage,
-    })
-    .returning({ id: agentLogs.id });
-
-  // 6. 5연속 오류 체크
-  await checkAfterInvoke(agent.id);
-
-  // 7. 응답 텍스트 추출
-  const text = lastResponse
-    ? lastResponse.content
-        .filter((b): b is Anthropic.TextBlock => b.type === "text")
-        .map((b) => b.text)
-        .join("\n")
-    : "";
+  const text = lastResponse ? extractText(lastResponse.content) : "";
 
   if (isError) {
     return NextResponse.json(
-      {
-        error: errorMessage,
-        agentLogId: logRow?.id,
-        iterations,
-        durationMs,
-      },
+      { error: errorMessage, agentLogId, iterations, durationMs },
       { status: 500 },
     );
   }
 
   return NextResponse.json({
     text,
-    agentLogId: logRow?.id,
+    agentLogId,
     iterations,
     durationMs,
     costUsd,
-    usage: {
-      input_tokens: totalInputTokens,
-      output_tokens: totalOutputTokens,
-      cache_creation_input_tokens: totalCacheCreate,
-      cache_read_input_tokens: totalCacheRead,
+    usage: totalUsage,
+  });
+}
+
+// ───────────────────────────────────────────────────────────
+// SSE 모드 (UI 채팅용 — 토큰 단위 스트리밍)
+// ───────────────────────────────────────────────────────────
+function runSseMode(opts: {
+  agent: AgentRow;
+  systemPrompt: string;
+  tools: AgentTool[];
+  runTool: (
+    name: string,
+    input: Record<string, unknown>,
+  ) => Promise<ToolResult>;
+  userMessage: string;
+  trigger: string;
+}): Response {
+  const { agent, systemPrompt, tools, runTool, userMessage, trigger } = opts;
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      function emit(event: string, data: unknown) {
+        const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+        controller.enqueue(encoder.encode(payload));
+      }
+
+      const startedAt = Date.now();
+      const messages: Anthropic.MessageParam[] = [
+        { role: "user", content: userMessage },
+      ];
+      const totalUsage: Usage = {
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+      };
+      let iterations = 0;
+      let lastFinal: Anthropic.Message | null = null;
+      const seenToolCalls = new Set<string>();
+      let isError = false;
+      let errorMessage: string | null = null;
+
+      try {
+        while (iterations < MAX_ITERATIONS) {
+          iterations += 1;
+          emit("iteration", { n: iterations });
+
+          const ms = streamAgent({
+            model: agent.model,
+            systemPrompt,
+            maxTokens: agent.maxTokens,
+            temperature: agent.temperature
+              ? parseFloat(agent.temperature)
+              : undefined,
+            messages,
+            tools,
+            cacheSystemAndTools: true,
+          });
+
+          for await (const event of ms) {
+            if (
+              event.type === "content_block_delta" &&
+              event.delta.type === "text_delta"
+            ) {
+              emit("delta", { text: event.delta.text });
+            }
+          }
+
+          const final = await ms.finalMessage();
+          lastFinal = final;
+          totalUsage.input_tokens += final.usage.input_tokens;
+          totalUsage.output_tokens += final.usage.output_tokens;
+          totalUsage.cache_creation_input_tokens +=
+            final.usage.cache_creation_input_tokens ?? 0;
+          totalUsage.cache_read_input_tokens +=
+            final.usage.cache_read_input_tokens ?? 0;
+
+          const toolUseBlocks = final.content.filter(
+            (b): b is Anthropic.ToolUseBlock => b.type === "tool_use",
+          );
+          if (final.stop_reason !== "tool_use" || toolUseBlocks.length === 0) {
+            break;
+          }
+
+          messages.push({ role: "assistant", content: final.content });
+
+          const toolResults: Anthropic.ToolResultBlockParam[] = [];
+          for (const tu of toolUseBlocks) {
+            emit("tool_call", { id: tu.id, name: tu.name, input: tu.input });
+
+            const sig = `${tu.name}:${JSON.stringify(tu.input)}`;
+            if (seenToolCalls.has(sig)) {
+              const errMsg =
+                "ERROR: 동일한 인자로 같은 도구를 두 번 이상 호출했습니다. 다른 접근을 시도하세요.";
+              toolResults.push({
+                type: "tool_result",
+                tool_use_id: tu.id,
+                content: errMsg,
+                is_error: true,
+              });
+              emit("tool_result", { id: tu.id, ok: false, error: errMsg });
+              continue;
+            }
+            seenToolCalls.add(sig);
+
+            const out = await runTool(
+              tu.name,
+              tu.input as Record<string, unknown>,
+            );
+            if (out.ok) {
+              toolResults.push({
+                type: "tool_result",
+                tool_use_id: tu.id,
+                content: JSON.stringify(out.result),
+              });
+              emit("tool_result", { id: tu.id, ok: true });
+            } else {
+              toolResults.push({
+                type: "tool_result",
+                tool_use_id: tu.id,
+                content: out.error,
+                is_error: true,
+              });
+              emit("tool_result", { id: tu.id, ok: false, error: out.error });
+            }
+          }
+
+          messages.push({ role: "user", content: toolResults });
+        }
+      } catch (e) {
+        isError = true;
+        errorMessage = e instanceof Error ? e.message : String(e);
+        console.error(
+          `[agent:${agent.englishName}] stream failed:`,
+          errorMessage,
+        );
+        emit("error", { message: errorMessage });
+      }
+
+      const durationMs = Date.now() - startedAt;
+      const costUsd = lastFinal ? calculateCostUsd(agent.model, totalUsage) : 0;
+      const fullText = lastFinal ? extractText(lastFinal.content) : "";
+
+      try {
+        const agentLogId = await logAgentResult(
+          agent.id,
+          trigger,
+          totalUsage,
+          durationMs,
+          costUsd,
+          isError,
+          errorMessage,
+        );
+        emit("done", {
+          fullText,
+          agentLogId,
+          iterations,
+          durationMs,
+          costUsd,
+          usage: totalUsage,
+          isError,
+        });
+      } catch (e) {
+        // 로그 실패는 사용자에게 표시 안 함 (이미 텍스트 응답은 성공)
+        console.error("agent_logs insert failed:", e);
+        emit("done", {
+          fullText,
+          iterations,
+          durationMs,
+          costUsd,
+          usage: totalUsage,
+          isError,
+        });
+      }
+
+      controller.close();
     },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      // proxy/CDN 버퍼 방지 (turbopack dev 환경에서도 무해)
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
+// ───────────────────────────────────────────────────────────
+// Route handler
+// ───────────────────────────────────────────────────────────
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ name: string }> },
+) {
+  const { name } = await params;
+
+  const depthHeader = request.headers.get(DEPTH_HEADER);
+  const depth = depthHeader ? parseInt(depthHeader, 10) : 0;
+  if (depth > MAX_AGENT_DEPTH) {
+    return NextResponse.json(
+      { error: "max_agent_depth_exceeded", depth },
+      { status: 400 },
+    );
+  }
+
+  let body: { message?: string; trigger?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+  const userMessage = body.message?.trim();
+  if (!userMessage) {
+    return NextResponse.json(
+      { error: "message is required" },
+      { status: 400 },
+    );
+  }
+  const trigger = body.trigger ?? "manual";
+
+  const [agent] = (await db
+    .select()
+    .from(agents)
+    .where(eq(agents.englishName, name))
+    .limit(1)) as AgentRow[];
+  if (!agent) {
+    return NextResponse.json({ error: "agent_not_found" }, { status: 404 });
+  }
+
+  const guard = await checkBeforeInvoke(agent.id);
+  if (!guard.ok) {
+    return NextResponse.json(
+      { error: guard.reason },
+      { status: guard.status },
+    );
+  }
+
+  const { tools, runTool } = getAgentTools(
+    name,
+    (agent.toolPermissions as ToolPerms) ?? {},
+    depth,
+  );
+  const systemPrompt = renderSystemPrompt(agent.systemPrompt);
+
+  // SSE는 호출자가 Accept 헤더로 명시적 opt-in. ask_agent의 server-to-server fetch는
+  // Accept 헤더를 보내지 않아 자동으로 JSON 모드. /api/chat은 SSE 모드 활성화.
+  const wantsSse =
+    request.headers.get("accept")?.includes("text/event-stream") ?? false;
+
+  if (wantsSse) {
+    return runSseMode({
+      agent,
+      systemPrompt,
+      tools,
+      runTool,
+      userMessage,
+      trigger,
+    });
+  }
+
+  return await runJsonMode({
+    agent,
+    systemPrompt,
+    tools,
+    runTool,
+    userMessage,
+    trigger,
   });
 }

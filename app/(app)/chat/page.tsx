@@ -1,21 +1,30 @@
 "use client";
 
-// /chat — 민지 메인 채팅 페이지.
-// 단일 세션 (URL ?session=ID로 재진입 가능). Phase 2 시점은 simple linear chat,
-// 세션 사이드바·이전 세션 검색은 추후 (Phase 6 Agent 관리 통합).
+// /chat — 민지 메인 채팅 페이지 (SSE 스트리밍).
+// 단일 세션 (URL ?session=ID로 재진입). 새 세션은 첫 메시지 송신 시 server에서 발급되어
+// `session` 이벤트로 전달 → URL 갱신.
 
-import { Suspense, useEffect, useRef, useState, useTransition } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { AgentBadge } from "@/components/agent-badge";
-import { Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2, Wrench, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { streamSseFetch } from "@/lib/sse/client";
+
+type ToolEvent = {
+  id: string;
+  name: string;
+  status: "running" | "ok" | "error";
+  error?: string;
+};
 
 type ChatMessage = {
   id?: string;
   role: "user" | "assistant";
   content: string;
   agentEnglishName?: string | null;
+  toolEvents?: ToolEvent[];
   meta?: {
     durationMs: number;
     costUsd: number;
@@ -30,7 +39,7 @@ function ChatContent() {
   const [sessionId, setSessionId] = useState<string | null>(sessionParam);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState<string>("");
-  const [isPending, startTransition] = useTransition();
+  const [streaming, setStreaming] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -72,57 +81,112 @@ function ChatContent() {
     };
   }, [sessionId]);
 
-  // 메시지 추가 시 자동 스크롤
   useEffect(() => {
     scrollRef.current?.scrollTo({
       top: scrollRef.current.scrollHeight,
       behavior: "smooth",
     });
-  }, [messages, isPending]);
+  }, [messages, streaming]);
 
-  function send() {
+  async function send() {
     const text = input.trim();
-    if (!text || isPending) return;
+    if (!text || streaming) return;
     setInput("");
     setError(null);
+
+    // user + 빈 assistant 메시지 동시 push. assistant는 streaming 중 누적 update.
     setMessages((prev) => [
       ...prev,
       { role: "user", content: text },
+      {
+        role: "assistant",
+        content: "",
+        agentEnglishName: "minji",
+        toolEvents: [],
+      },
     ]);
 
-    startTransition(async () => {
-      try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ sessionId, message: text }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error ?? `status ${res.status}`);
+    setStreaming(true);
 
-        // 첫 호출이면 sessionId 받아서 URL 갱신
-        if (!sessionId && data.sessionId) {
-          setSessionId(data.sessionId);
-          router.replace(`/chat?session=${data.sessionId}`);
-        }
+    function updateAssistant(updater: (m: ChatMessage) => ChatMessage) {
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const last = prev.length - 1;
+        const next = [...prev];
+        next[last] = updater(next[last]);
+        return next;
+      });
+    }
 
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            content: data.text || "(빈 응답)",
-            agentEnglishName: "minji",
-            meta: {
-              durationMs: data.durationMs,
-              costUsd: data.costUsd ?? 0,
-              iterations: data.iterations ?? 1,
-            },
-          },
-        ]);
-      } catch (e) {
-        setError(`민지 호출 실패: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    });
+    await streamSseFetch(
+      "/api/chat",
+      {
+        method: "POST",
+        body: JSON.stringify({ sessionId, message: text }),
+      },
+      {
+        onEvent: (name, data) => {
+          if (name === "session" && data && typeof data === "object") {
+            const d = data as { sessionId?: string };
+            if (!sessionId && d.sessionId) {
+              setSessionId(d.sessionId);
+              router.replace(`/chat?session=${d.sessionId}`);
+            }
+          } else if (name === "delta" && data && typeof data === "object") {
+            const d = data as { text?: string };
+            if (d.text) {
+              updateAssistant((m) => ({ ...m, content: m.content + d.text }));
+            }
+          } else if (name === "tool_call" && data && typeof data === "object") {
+            const d = data as { id: string; name: string };
+            updateAssistant((m) => ({
+              ...m,
+              toolEvents: [
+                ...(m.toolEvents ?? []),
+                { id: d.id, name: d.name, status: "running" },
+              ],
+            }));
+          } else if (name === "tool_result" && data && typeof data === "object") {
+            const d = data as { id: string; ok: boolean; error?: string };
+            updateAssistant((m) => ({
+              ...m,
+              toolEvents: (m.toolEvents ?? []).map((ev) =>
+                ev.id === d.id
+                  ? { ...ev, status: d.ok ? "ok" : "error", error: d.error }
+                  : ev,
+              ),
+            }));
+          } else if (name === "done" && data && typeof data === "object") {
+            const d = data as {
+              fullText?: string;
+              durationMs?: number;
+              costUsd?: number;
+              iterations?: number;
+              assistantMessageId?: string;
+            };
+            updateAssistant((m) => ({
+              ...m,
+              id: d.assistantMessageId ?? m.id,
+              // fullText 받으면 delta 누락 보정
+              content: d.fullText && d.fullText.length > 0 ? d.fullText : m.content,
+              meta: {
+                durationMs: d.durationMs ?? 0,
+                costUsd: d.costUsd ?? 0,
+                iterations: d.iterations ?? 1,
+              },
+            }));
+          } else if (name === "error" && data && typeof data === "object") {
+            const d = data as { message?: string };
+            setError(`민지 응답 실패: ${d.message ?? "unknown"}`);
+          }
+        },
+        onError: (e) => {
+          setError(`민지 호출 실패: ${e instanceof Error ? e.message : String(e)}`);
+        },
+      },
+    );
+
+    setStreaming(false);
   }
 
   return (
@@ -160,7 +224,7 @@ function ChatContent() {
       )}
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
-        {messages.length === 0 && !isPending ? (
+        {messages.length === 0 && !streaming ? (
           <div className="text-sm text-muted-foreground text-center py-12 max-w-md mx-auto leading-relaxed">
             예시:
             <br />
@@ -194,7 +258,41 @@ function ChatContent() {
                       : "bg-muted text-foreground",
                   )}
                 >
-                  {m.content}
+                  {m.content || (m.role === "assistant" && streaming && i === messages.length - 1 ? (
+                    <span className="inline-flex items-center gap-1.5 text-muted-foreground/80">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      생각 중...
+                    </span>
+                  ) : null)}
+                  {m.toolEvents && m.toolEvents.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {m.toolEvents.map((ev) => (
+                        <span
+                          key={ev.id}
+                          className={cn(
+                            "inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border",
+                            ev.status === "running" &&
+                              "bg-muted-foreground/10 text-muted-foreground border-border",
+                            ev.status === "ok" &&
+                              "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
+                            ev.status === "error" &&
+                              "bg-destructive/10 text-destructive border-destructive/30",
+                          )}
+                          title={ev.error ?? ev.name}
+                        >
+                          {ev.status === "running" ? (
+                            <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                          ) : ev.status === "ok" ? (
+                            <CheckCircle2 className="h-2.5 w-2.5" />
+                          ) : (
+                            <XCircle className="h-2.5 w-2.5" />
+                          )}
+                          <Wrench className="h-2.5 w-2.5" />
+                          {ev.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {m.meta && (
                     <div className="mt-2 pt-2 border-t border-border/40 text-[10px] text-muted-foreground/80 font-mono">
                       {m.meta.iterations}회 · {m.meta.durationMs}ms · $
@@ -204,15 +302,6 @@ function ChatContent() {
                 </div>
               </div>
             ))}
-            {isPending && (
-              <div className="flex gap-3 justify-start">
-                <AgentBadge englishName="minji" size="sm" showName={false} />
-                <div className="bg-muted text-muted-foreground rounded-2xl px-4 py-2.5 text-sm flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  생각 중...
-                </div>
-              </div>
-            )}
           </div>
         )}
       </div>
@@ -230,11 +319,11 @@ function ChatContent() {
               }
             }}
             placeholder="민지에게 무엇이든 물어보세요…"
-            disabled={isPending}
+            disabled={streaming}
             className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
-          <Button onClick={send} disabled={isPending || !input.trim()}>
-            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "보내기"}
+          <Button onClick={send} disabled={streaming || !input.trim()}>
+            {streaming ? <Loader2 className="h-4 w-4 animate-spin" /> : "보내기"}
           </Button>
         </div>
       </div>

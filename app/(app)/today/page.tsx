@@ -7,11 +7,21 @@
 //   - "캘린더 동기화" 버튼 → POST /api/sync/calendar → calendar_events_cache 갱신
 
 import Link from "next/link";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { AgentBadge } from "@/components/agent-badge";
-import { CalendarClock, CheckSquare, Loader2, RefreshCw, Square } from "lucide-react";
+import {
+  CalendarClock,
+  CheckCircle2,
+  CheckSquare,
+  Loader2,
+  RefreshCw,
+  Square,
+  Wrench,
+  XCircle,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
+import { streamSseFetch } from "@/lib/sse/client";
 
 type Todo = {
   id: string;
@@ -37,16 +47,21 @@ type AgendaEvent = {
   syncedAt: string;
 };
 
+type ToolEvent = {
+  id: string;
+  name: string;
+  status: "running" | "ok" | "error";
+  error?: string;
+};
+
 type ChatMessage = {
-  role: "user" | "agent";
+  role: "user" | "assistant";
   text: string;
+  toolEvents?: ToolEvent[];
   meta?: {
     iterations: number;
     durationMs: number;
     costUsd: number;
-    inputTokens: number;
-    outputTokens: number;
-    cacheRead: number;
   };
 };
 
@@ -93,7 +108,7 @@ export default function TodayPage() {
   const [calendarReauth, setCalendarReauth] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState<string>("");
-  const [isPending, startTransition] = useTransition();
+  const [streaming, setStreaming] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   async function fetchTodos() {
@@ -188,45 +203,92 @@ export default function TodayPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function send() {
+  async function send() {
     const text = input.trim();
-    if (!text || isPending) return;
+    if (!text || streaming) return;
     setInput("");
     setError(null);
-    setMessages((prev) => [...prev, { role: "user", text }]);
+    setMessages((prev) => [
+      ...prev,
+      { role: "user", text },
+      { role: "assistant", text: "", toolEvents: [] },
+    ]);
+    setStreaming(true);
 
-    startTransition(async () => {
-      try {
-        const res = await fetch("/api/agents/hayoung/invoke", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text, trigger: "today_chat" }),
-        });
-        const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data?.error ?? `status ${res.status}`);
-        }
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "agent",
-            text: data.text || "(빈 응답)",
-            meta: {
-              iterations: data.iterations,
-              durationMs: data.durationMs,
-              costUsd: data.costUsd,
-              inputTokens: data.usage?.input_tokens ?? 0,
-              outputTokens: data.usage?.output_tokens ?? 0,
-              cacheRead: data.usage?.cache_read_input_tokens ?? 0,
-            },
-          },
-        ]);
-        // 도구 호출이 있었을 가능성 → Todo + 캘린더 새로고침
-        await Promise.all([fetchTodos(), fetchAgenda()]);
-      } catch (e) {
-        setError(`하영 호출 실패: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    });
+    function updateAssistant(updater: (m: ChatMessage) => ChatMessage) {
+      setMessages((prev) => {
+        if (prev.length === 0) return prev;
+        const last = prev.length - 1;
+        const next = [...prev];
+        next[last] = updater(next[last]);
+        return next;
+      });
+    }
+
+    let toolUsed = false;
+    await streamSseFetch(
+      "/api/agents/hayoung/invoke",
+      {
+        method: "POST",
+        body: JSON.stringify({ message: text, trigger: "today_chat" }),
+      },
+      {
+        onEvent: (name, data) => {
+          if (name === "delta" && data && typeof data === "object") {
+            const d = data as { text?: string };
+            if (d.text) updateAssistant((m) => ({ ...m, text: m.text + d.text }));
+          } else if (name === "tool_call" && data && typeof data === "object") {
+            const d = data as { id: string; name: string };
+            toolUsed = true;
+            updateAssistant((m) => ({
+              ...m,
+              toolEvents: [
+                ...(m.toolEvents ?? []),
+                { id: d.id, name: d.name, status: "running" },
+              ],
+            }));
+          } else if (name === "tool_result" && data && typeof data === "object") {
+            const d = data as { id: string; ok: boolean; error?: string };
+            updateAssistant((m) => ({
+              ...m,
+              toolEvents: (m.toolEvents ?? []).map((ev) =>
+                ev.id === d.id
+                  ? { ...ev, status: d.ok ? "ok" : "error", error: d.error }
+                  : ev,
+              ),
+            }));
+          } else if (name === "done" && data && typeof data === "object") {
+            const d = data as {
+              fullText?: string;
+              durationMs?: number;
+              costUsd?: number;
+              iterations?: number;
+            };
+            updateAssistant((m) => ({
+              ...m,
+              text: d.fullText && d.fullText.length > 0 ? d.fullText : m.text,
+              meta: {
+                durationMs: d.durationMs ?? 0,
+                costUsd: d.costUsd ?? 0,
+                iterations: d.iterations ?? 1,
+              },
+            }));
+          } else if (name === "error" && data && typeof data === "object") {
+            const d = data as { message?: string };
+            setError(`하영 호출 실패: ${d.message ?? "unknown"}`);
+          }
+        },
+        onError: (e) => {
+          setError(`하영 호출 실패: ${e instanceof Error ? e.message : String(e)}`);
+        },
+      },
+    );
+
+    setStreaming(false);
+    // 도구가 호출됐다면 Todo / 캘린더가 변경됐을 가능성 → 새로고침
+    if (toolUsed) {
+      await Promise.all([fetchTodos(), fetchAgenda()]);
+    }
   }
 
   async function toggleComplete(todo: Todo) {
@@ -442,7 +504,7 @@ export default function TodayPage() {
                   m.role === "user" ? "justify-end" : "justify-start",
                 )}
               >
-                {m.role === "agent" && (
+                {m.role === "assistant" && (
                   <AgentBadge englishName="hayoung" size="sm" showName={false} />
                 )}
                 <div
@@ -453,13 +515,48 @@ export default function TodayPage() {
                       : "bg-muted text-foreground",
                   )}
                 >
-                  {m.text}
+                  {m.text ||
+                    (m.role === "assistant" &&
+                    streaming &&
+                    i === messages.length - 1 ? (
+                      <span className="inline-flex items-center gap-1.5 text-muted-foreground/80">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        생각 중...
+                      </span>
+                    ) : null)}
+                  {m.toolEvents && m.toolEvents.length > 0 && (
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {m.toolEvents.map((ev) => (
+                        <span
+                          key={ev.id}
+                          className={cn(
+                            "inline-flex items-center gap-1 text-[10px] font-mono px-1.5 py-0.5 rounded border",
+                            ev.status === "running" &&
+                              "bg-muted-foreground/10 text-muted-foreground border-border",
+                            ev.status === "ok" &&
+                              "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30",
+                            ev.status === "error" &&
+                              "bg-destructive/10 text-destructive border-destructive/30",
+                          )}
+                          title={ev.error ?? ev.name}
+                        >
+                          {ev.status === "running" ? (
+                            <Loader2 className="h-2.5 w-2.5 animate-spin" />
+                          ) : ev.status === "ok" ? (
+                            <CheckCircle2 className="h-2.5 w-2.5" />
+                          ) : (
+                            <XCircle className="h-2.5 w-2.5" />
+                          )}
+                          <Wrench className="h-2.5 w-2.5" />
+                          {ev.name}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                   {m.meta && (
                     <div className="mt-2 pt-2 border-t border-border/50 text-[10px] text-muted-foreground font-mono">
                       {m.meta.iterations}회 · {m.meta.durationMs}ms · $
-                      {m.meta.costUsd.toFixed(6)} · in {m.meta.inputTokens} /
-                      out {m.meta.outputTokens}
-                      {m.meta.cacheRead > 0 && ` · cached ${m.meta.cacheRead}`}
+                      {m.meta.costUsd.toFixed(6)}
                     </div>
                   )}
                 </div>
@@ -479,11 +576,11 @@ export default function TodayPage() {
               }
             }}
             placeholder="하영에게 물어보거나 Todo를 만들어달라고 하세요…"
-            disabled={isPending}
+            disabled={streaming}
             className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
-          <Button onClick={send} disabled={isPending || !input.trim()}>
-            {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "보내기"}
+          <Button onClick={send} disabled={streaming || !input.trim()}>
+            {streaming ? <Loader2 className="h-4 w-4 animate-spin" /> : "보내기"}
           </Button>
         </div>
       </section>

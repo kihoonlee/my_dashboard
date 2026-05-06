@@ -227,8 +227,18 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 | **`users.settings_json.lastCalendarSync`**: 동기화 직후 `{ at, count, deletedStale }` upsert. agenda 응답에도 lastSync 포함해 "한 번도 sync 안 함" vs "sync 했는데 0건" 구분. | `app/api/sync/calendar/route.ts`, `app/api/calendar/agenda/route.ts` |
 | **/today UX 개선**: 헤더에 "마지막 동기화 HH:mm · N건" 항상 표시 / 동기화 직후 4초 토스트 / 빈 상태 메시지 분기 / **5분 throttle 자동 동기화**(페이지 진입 시 fresh면 skip, stale이면 자동 호출). | `app/(app)/today/page.tsx` |
 
+### Phase 2B Realtime 응답 스트리밍 — ✅ 완료
+
+| 항목 | 결과 |
+|---|---|
+| `lib/anthropic/client.ts`에 `streamAgent` 추가 — `MessageStream` 반환, async iterable, prompt caching 동일 적용 | client.ts |
+| `/api/agents/[name]/invoke` SSE 분기 — `Accept: text/event-stream` opt-in. tool-use 루프 안에서 토큰 단위 `delta` / `tool_call` / `tool_result` / `iteration` / `done` / `error` 이벤트 emit. JSON 모드는 ask_agent(server-to-server)가 그대로 사용. | invoke/route.ts |
+| `/api/chat` SSE pass-through — `session` 이벤트로 sessionId/userMessageId 발급, upstream 이벤트 forward, `done`만 가로채 chat_messages 영속화 + assistantMessageId 추가해 다시 emit. | chat/route.ts |
+| `lib/sse/client.ts` 공용 SSE 파서 — POST + body가 필요해 EventSource 못 씀, fetch + ReadableStream 직접 파싱. | client.ts |
+| `/chat` (민지) UI: 송신 직후 빈 assistant 메시지 push → `delta`마다 누적 + tool 호출 칩(running/ok/error 상태) + `done`에서 meta. | app/(app)/chat/page.tsx |
+| `/today` (하영) UI: 동일 패턴. tool 사용 후 Todo/Calendar 자동 새로고침. | app/(app)/today/page.tsx |
+
 ### Phase 2B 잔여 (다음 후보)
-- Supabase Realtime 응답 스트리밍 (현재는 동기 응답 — tool 사용 시 1-3초 침묵).
 - ⌘K 명령 팔레트 헤더 연결 (현재 placeholder).
 
 ### Phase 3 (Week 4-5) — 지식 영역 (서연 + 다솜) + 옵시디언

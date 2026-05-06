@@ -111,3 +111,64 @@ export async function invokeAgent(params: {
     ...(tools ? { tools } : {}),
   });
 }
+
+function buildSystem(
+  systemPrompt: string,
+  cache: boolean,
+): Anthropic.TextBlockParam[] {
+  return [
+    {
+      type: "text",
+      text: systemPrompt,
+      ...(cache ? { cache_control: { type: "ephemeral" } } : {}),
+    },
+  ];
+}
+
+function buildTools(
+  tools: AgentTool[] | undefined,
+  cache: boolean,
+): Anthropic.Tool[] | undefined {
+  if (!tools || tools.length === 0) return undefined;
+  return tools.map((t, i) => ({
+    name: t.name,
+    description: t.description,
+    input_schema: t.input_schema as Anthropic.Tool.InputSchema,
+    ...(cache && i === tools.length - 1
+      ? { cache_control: { type: "ephemeral" as const } }
+      : {}),
+  }));
+}
+
+/**
+ * Streaming invoke — invokeAgent와 동일 인자, MessageStream 반환.
+ * 호출자는 async iterator로 RawMessageStreamEvent 순회 + .finalMessage()로 종료 메시지 획득.
+ *
+ * SDK의 stream()이 cache_creation_input_tokens / cache_read_input_tokens 등 usage 메타도
+ * 최종 message에 포함해 돌려준다. 일반 invoke와 동일한 비용 계산 가능.
+ */
+export function streamAgent(params: {
+  model: string;
+  systemPrompt: string;
+  maxTokens: number;
+  temperature?: number;
+  messages: Anthropic.MessageParam[];
+  tools?: AgentTool[];
+  cacheSystemAndTools?: boolean;
+}): import("@anthropic-ai/sdk/lib/MessageStream").MessageStream {
+  const anthropic = getAnthropicClient();
+  const cache = !!params.cacheSystemAndTools;
+  const system = buildSystem(params.systemPrompt, cache);
+  const tools = buildTools(params.tools, cache);
+
+  return anthropic.messages.stream({
+    model: params.model,
+    max_tokens: params.maxTokens,
+    ...(typeof params.temperature === "number"
+      ? { temperature: params.temperature }
+      : {}),
+    system,
+    messages: params.messages,
+    ...(tools ? { tools } : {}),
+  });
+}
