@@ -7,7 +7,7 @@
 //   - "캘린더 동기화" 버튼 → POST /api/sync/calendar → calendar_events_cache 갱신
 
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { AgentBadge } from "@/components/agent-badge";
 import { CalendarClock, CheckSquare, Loader2, RefreshCw, Square } from "lucide-react";
@@ -57,6 +57,10 @@ const PRIORITY_COLOR: Record<string, string> = {
   P3: "bg-muted/50 text-muted-foreground/70 border-border",
 };
 
+// 자동 동기화 stale 임계 — 마지막 sync로부터 이 시간 이상 지났으면 페이지 진입 시 자동 호출.
+// Google Calendar API 쿼터/비용 부담을 피하면서도, 진입할 때 신선한 데이터를 보장하는 균형점.
+const AUTO_SYNC_STALE_MS = 5 * 60 * 1000;
+
 function formatEventTime(startAt: string, endAt: string): string {
   const s = new Date(startAt);
   const e = new Date(endAt);
@@ -82,7 +86,10 @@ export default function TodayPage() {
   const [events, setEvents] = useState<AgendaEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState<boolean>(true);
   const [syncing, setSyncing] = useState<boolean>(false);
-  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [lastSync, setLastSync] = useState<{ at: string; count: number } | null>(
+    null,
+  );
+  const [justSynced, setJustSynced] = useState<{ count: number } | null>(null);
   const [calendarReauth, setCalendarReauth] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState<string>("");
@@ -103,24 +110,28 @@ export default function TodayPage() {
     }
   }
 
-  async function fetchAgenda() {
+  async function fetchAgenda(): Promise<{
+    events: AgendaEvent[];
+    lastSync: { at: string; count: number } | null;
+  } | null> {
     setLoadingEvents(true);
     try {
       const res = await fetch("/api/calendar/agenda?days=1", {
         cache: "no-store",
       });
       if (!res.ok) throw new Error(`status ${res.status}`);
-      const data = (await res.json()) as { events: AgendaEvent[] };
+      const data = (await res.json()) as {
+        events: AgendaEvent[];
+        lastSync: { at: string; count: number } | null;
+      };
       setEvents(data.events);
-      const latest = data.events.reduce<string | null>(
-        (acc, ev) => (acc && acc > ev.syncedAt ? acc : ev.syncedAt),
-        null,
-      );
-      setLastSyncedAt(latest);
+      setLastSync(data.lastSync ?? null);
+      return data;
     } catch (e) {
       setError(
         `캘린더 캐시 조회 실패: ${e instanceof Error ? e.message : String(e)}`,
       );
+      return null;
     } finally {
       setLoadingEvents(false);
     }
@@ -130,6 +141,7 @@ export default function TodayPage() {
     if (syncing) return;
     setSyncing(true);
     setCalendarReauth(null);
+    setJustSynced(null);
     try {
       const res = await fetch("/api/sync/calendar", { method: "POST" });
       const data = await res.json().catch(() => ({}));
@@ -142,7 +154,10 @@ export default function TodayPage() {
       if (!res.ok) {
         throw new Error(data?.message ?? data?.error ?? `status ${res.status}`);
       }
+      setJustSynced({ count: data.upserts ?? 0 });
       await fetchAgenda();
+      // 4초 후 토스트성 메시지 자동 정리
+      setTimeout(() => setJustSynced(null), 4000);
     } catch (e) {
       setError(
         `캘린더 동기화 실패: ${e instanceof Error ? e.message : String(e)}`,
@@ -152,9 +167,25 @@ export default function TodayPage() {
     }
   }
 
+  // 페이지 mount 시 1회만 자동 sync 결정 (StrictMode 이중 실행 / 의존성 변경 방어)
+  const autoSyncDecidedRef = useRef(false);
+
   useEffect(() => {
-    fetchTodos();
-    fetchAgenda();
+    void (async () => {
+      void fetchTodos();
+      const data = await fetchAgenda();
+      if (autoSyncDecidedRef.current) return;
+      autoSyncDecidedRef.current = true;
+      if (!data) return;
+      const stale =
+        !data.lastSync ||
+        Date.now() - new Date(data.lastSync.at).getTime() > AUTO_SYNC_STALE_MS;
+      if (stale) {
+        // 자동 동기화. 권한 만료(412)면 syncCalendar 내부에서 calendarReauth 메시지 셋.
+        void syncCalendar();
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function send() {
@@ -305,13 +336,14 @@ export default function TodayPage() {
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">오늘 캘린더</h2>
           <div className="flex items-center gap-3">
-            {lastSyncedAt && (
+            {lastSync && (
               <span className="text-[11px] text-muted-foreground font-mono">
                 마지막 동기화{" "}
-                {new Date(lastSyncedAt).toLocaleTimeString("ko-KR", {
+                {new Date(lastSync.at).toLocaleTimeString("ko-KR", {
                   hour: "2-digit",
                   minute: "2-digit",
-                })}
+                })}{" "}
+                · {lastSync.count}건
               </span>
             )}
             <Button
@@ -330,6 +362,12 @@ export default function TodayPage() {
             </Button>
           </div>
         </div>
+
+        {justSynced && (
+          <div className="text-xs text-primary bg-primary/10 border border-primary/20 rounded-lg px-3 py-2">
+            동기화 완료 — 오늘 ~ +7일 윈도우에서 {justSynced.count}건 가져옴
+          </div>
+        )}
 
         {calendarReauth && (
           <div
@@ -354,7 +392,9 @@ export default function TodayPage() {
         ) : events.length === 0 ? (
           <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
             <CalendarClock className="h-5 w-5 opacity-60" />
-            오늘 일정이 없거나, 아직 동기화하지 않았습니다.
+            {lastSync
+              ? "오늘은 일정이 없습니다."
+              : "아직 동기화하지 않았습니다. 위 '동기화' 버튼을 눌러 가져오세요."}
           </div>
         ) : (
           <ul className="flex flex-col divide-y divide-border border border-border rounded-xl overflow-hidden">

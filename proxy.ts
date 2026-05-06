@@ -6,7 +6,20 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/auth/login", "/auth/callback", "/auth/error"];
+const PUBLIC_PATHS = [
+  "/auth/login",
+  "/auth/callback",
+  "/auth/error",
+  "/auth/signout",
+];
+
+// next로 사용 가능한 path: 내부 path여야 하고 auth 라우트 자체로는 못 감 (무한 재귀 방지).
+function sanitizeNext(raw: string | null | undefined): string {
+  if (!raw) return "/";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/";
+  if (raw.startsWith("/auth/")) return "/";
+  return raw;
+}
 
 export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -52,9 +65,27 @@ export async function proxy(request: NextRequest) {
 
   // 인증 안 됨 → 로그인 페이지로 (public path 또는 내부 agent 호출 제외)
   if (!user && !isPublic && !isInternalAgentCall) {
+    // OAuth provider 응답이 site_url(=`/`) 으로 떨어진 케이스 — Supabase가 redirectTo
+    // 매칭에 실패해 `/?code=...&state=...`로 떨어뜨릴 수 있음.
+    // 그대로 `/auth/login`으로 redirect하면 ?code가 같이 옮겨가 버려 PKCE verifier가
+    // client storage에 없는 상황이 됨. → 서버 callback으로 forward해 exchange 흐름으로 일원화.
+    const hasOauthCode = request.nextUrl.searchParams.has("code");
+    const hasOauthError = request.nextUrl.searchParams.has("error");
+    if (hasOauthCode || hasOauthError) {
+      const callbackUrl = request.nextUrl.clone();
+      callbackUrl.pathname = "/auth/callback";
+      callbackUrl.searchParams.delete("next");
+      return NextResponse.redirect(callbackUrl);
+    }
+
     const loginUrl = request.nextUrl.clone();
     loginUrl.pathname = "/auth/login";
-    loginUrl.searchParams.set("next", pathname);
+    // OAuth 잔여 params는 절대 옮겨붙이지 않는다 (defense-in-depth)
+    loginUrl.searchParams.delete("code");
+    loginUrl.searchParams.delete("state");
+    loginUrl.searchParams.delete("error");
+    loginUrl.searchParams.delete("error_description");
+    loginUrl.searchParams.set("next", sanitizeNext(pathname));
     return NextResponse.redirect(loginUrl);
   }
 

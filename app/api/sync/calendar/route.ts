@@ -4,9 +4,9 @@
 // Phase 7 진입 시 5분 cron으로도 호출 예정.
 
 import { NextResponse } from "next/server";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { calendarEventsCache } from "@/lib/db/schema";
+import { calendarEventsCache, users } from "@/lib/db/schema";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureUser } from "@/lib/users/ensure";
 import {
@@ -115,19 +115,39 @@ export async function POST() {
   }
 
   // 윈도우 시작점 이전의 stale 이벤트 정리 (지난 일정은 캐시에 두지 않음 — 하영이 헷갈리지 않게)
+  // postgres-js raw sql은 Date 자동 캐스팅 안 하므로 ISO 문자열 + ::timestamptz 캐스트.
+  const timeMinIso = timeMin.toISOString();
   const deleted = await db.execute<{ count: number }>(sql`
     WITH d AS (
-      DELETE FROM calendar_events_cache WHERE start_at < ${timeMin} RETURNING 1
+      DELETE FROM calendar_events_cache WHERE start_at < ${timeMinIso}::timestamptz RETURNING 1
     )
     SELECT count(*)::int AS count FROM d
   `);
 
+  // users.settings_json.lastCalendarSync 갱신 — UI에서 "동기화는 했는데 일정이 0건"인
+  // 상태와 "한 번도 동기화 안 함" 상태를 구분하기 위한 신호.
+  const syncedAt = new Date().toISOString();
+  const summary = {
+    at: syncedAt,
+    count: upserts,
+    deletedStale: deleted[0]?.count ?? 0,
+  };
+  await db
+    .update(users)
+    .set({
+      settingsJson: sql`
+        COALESCE(${users.settingsJson}, '{}'::jsonb)
+        || jsonb_build_object('lastCalendarSync', ${JSON.stringify(summary)}::jsonb)
+      `,
+    })
+    .where(eq(users.id, userId));
+
   return NextResponse.json({
     ok: true,
     upserts,
-    deletedStale: deleted[0]?.count ?? 0,
+    deletedStale: summary.deletedStale,
     windowStart: timeMin.toISOString(),
     windowEnd: timeMax.toISOString(),
-    syncedAt: new Date().toISOString(),
+    syncedAt,
   });
 }

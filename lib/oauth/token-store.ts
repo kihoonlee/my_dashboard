@@ -27,6 +27,9 @@ export async function saveRefreshToken(params: {
 }): Promise<void> {
   const { userId, provider, refreshToken, scope, expiresAt } = params;
   const key = getKey();
+  // drizzle/postgres-js raw sql 바인딩은 Date 객체를 자동 캐스팅하지 않으므로
+  // ISO 문자열 + ::timestamptz 명시 캐스트로 넘긴다.
+  const expiresAtIso = expiresAt ? expiresAt.toISOString() : null;
 
   await db.execute(sql`
     INSERT INTO oauth_tokens (
@@ -37,7 +40,7 @@ export async function saveRefreshToken(params: {
       ${provider},
       ${scope ?? ""},
       encode(pgp_sym_encrypt(${refreshToken}, ${key}), 'base64'),
-      ${expiresAt ?? null},
+      ${expiresAtIso}::timestamptz,
       now(),
       now(),
       now()

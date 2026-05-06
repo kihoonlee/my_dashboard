@@ -1,6 +1,6 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-06 (Phase 2B 캘린더 1차 완료 — OAuth refresh token 암호화 저장 + Calendar sync + 하영 캘린더 tool)**
+> 최종 업데이트: **2026-05-06 (Phase 2B 캘린더 1차 + 인증 흐름 정리 + 자동 동기화 UX)**
 > 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
 > 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md`
 
@@ -214,9 +214,21 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 3. `/today`에서 "동기화" 버튼 → `oauth_tokens`에 1행 생긴 후 `calendar_events_cache` 채워지는지.
 4. 하영에게 "오늘 일정 뭐 있어?" → `list_events_today` tool 호출 확인.
 
-### Phase 2B 잔여 (다음)
-- 5분 cron으로 자동 sync (Phase 7 Vercel Cron과 함께 일괄 도입 — 단일 사용자 dev에서는 수동 트리거로도 충분).
-- Supabase Realtime 응답 스트리밍 (현재는 동기 응답).
+### Phase 2B 인증 흐름 정리 + 자동 동기화 — ✅ 완료
+
+| 항목 | 결과 |
+|---|---|
+| **PKCE 흐름**: 무효한 client-side `exchangeCodeForSession` fallback 제거. ?code 들고 떨어진 요청은 `/auth/callback`으로 server forward. | `proxy.ts`, `app/auth/login/page.tsx` |
+| **OAuth query 누수 차단**: proxy redirect 시 `code/state/error/error_description` strip. | `proxy.ts` |
+| **next 화이트리스트**: `/auth/*`로 시작하는 next는 `/`로 강제 (무한 재귀 방지). | `proxy.ts`, `lib/http/origin.ts` 패턴, login/callback |
+| **`/auth/signout`**: PUBLIC_PATHS에 추가. POST + GET 핸들러 둘 다 지원 (브라우저 직접 진입 호환). | `app/auth/signout/route.ts` |
+| **Host header 기반 absolute redirect**: `next dev -H 0.0.0.0`이라 `request.url`의 host가 `0.0.0.0`이 박히는 문제 해결 — 사용자가 접근한 host(127.0.0.1) 그대로 보존. | `lib/http/origin.ts`, signout/callback 적용 |
+| **Date → ISO::timestamptz 캐스트**: drizzle/postgres-js raw `sql` template은 Date 객체 자동 변환 안 함. `oauth_tokens` insert + `calendar_events_cache` stale delete 두 군데 수정. | `lib/oauth/token-store.ts`, `app/api/sync/calendar/route.ts` |
+| **`users.settings_json.lastCalendarSync`**: 동기화 직후 `{ at, count, deletedStale }` upsert. agenda 응답에도 lastSync 포함해 "한 번도 sync 안 함" vs "sync 했는데 0건" 구분. | `app/api/sync/calendar/route.ts`, `app/api/calendar/agenda/route.ts` |
+| **/today UX 개선**: 헤더에 "마지막 동기화 HH:mm · N건" 항상 표시 / 동기화 직후 4초 토스트 / 빈 상태 메시지 분기 / **5분 throttle 자동 동기화**(페이지 진입 시 fresh면 skip, stale이면 자동 호출). | `app/(app)/today/page.tsx` |
+
+### Phase 2B 잔여 (다음 후보)
+- Supabase Realtime 응답 스트리밍 (현재는 동기 응답 — tool 사용 시 1-3초 침묵).
 - ⌘K 명령 팔레트 헤더 연결 (현재 placeholder).
 
 ### Phase 3 (Week 4-5) — 지식 영역 (서연 + 다솜) + 옵시디언

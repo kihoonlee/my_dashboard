@@ -8,16 +8,25 @@ import { cookies } from "next/headers";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureUser } from "@/lib/users/ensure";
 import { saveRefreshToken } from "@/lib/oauth/token-store";
+import { requestOrigin } from "@/lib/http/origin";
 
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
+  // 사용자가 접근한 host 헤더 기준 origin (next dev -H 0.0.0.0 환경에서 0.0.0.0이 박히는 것 방지)
+  const origin = requestOrigin(request);
 
   // next 라우트는 login 시 클라이언트가 cookie로 보냄 (?next= 쿼리는 Supabase wildcard 매칭
-  // 문제로 사용 안 함). 없으면 홈.
+  // 문제로 사용 안 함). 없으면 홈. auth/* 같은 잘못된 next는 무시 (무한 재귀 방지).
   const cookieStore = await cookies();
   const nextCookie = cookieStore.get("auth_next")?.value;
-  const next = nextCookie ? decodeURIComponent(nextCookie) : "/";
+  const decoded = nextCookie ? decodeURIComponent(nextCookie) : "/";
+  const next =
+    decoded.startsWith("/") &&
+    !decoded.startsWith("//") &&
+    !decoded.startsWith("/auth/")
+      ? decoded
+      : "/";
 
   console.log("[auth/callback] code present:", !!code, "next:", next);
 

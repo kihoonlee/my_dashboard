@@ -137,3 +137,22 @@ npm run db:studio
 **Anthropic prompt caching invariant**
 - prefix match — system prompt 첫 부분에 `Date.now()` / `uuid()` 같은 변동값 박으면 cache 전혀 안 됨. `{current_time}` 같은 placeholder 치환은 시스템 프롬프트 **끝부분**으로 옮기거나, message 쪽에 넣을 것 (현재는 시드 시스템 프롬프트 시작부에 있어서 cache 효과 제한적 — 추후 정밀화 대상).
 - `cache_read_input_tokens > 0`인지로 검증. 0이면 silent invalidator 의심.
+
+**Supabase OAuth PKCE — client-side `exchangeCodeForSession`은 작동 안 함**
+- PKCE `code_verifier`는 server cookie(httpOnly)에 저장되므로 브라우저 JS에선 절대 못 읽음. 따라서 `/auth/login` 같은 client 페이지에서 `supabase.auth.exchangeCodeForSession(code)` 호출하면 항상 "PKCE code verifier not found" 에러. 모든 exchange는 server route handler(`/auth/callback`)에서.
+- Supabase가 redirectTo 매칭에 실패하면 site_url(`/`)로 떨어뜨리는데, proxy.ts가 unauthenticated 요청을 `/auth/login?next=...`로 redirect할 때 OAuth query(`?code/?state/?error`)를 그대로 옮겨붙이면 위 함정에 빠짐. → proxy에서 `?code`/`?error` 들어오면 `/auth/callback`으로 forward, 일반 redirect는 OAuth params strip.
+
+**`/auth/signout`은 PUBLIC_PATHS에 포함 + GET 핸들러 필수**
+- 누락하면 unauthenticated 사용자가 signout URL 진입 시 `/auth/login?next=/auth/signout` 루프. PUBLIC_PATHS에 추가하고 `next`도 `/auth/*` strip.
+- POST만 노출하면 브라우저 주소창 직접 진입 시 405. POST + GET 둘 다 export.
+
+**Next 16 turbopack — route handler에 새 HTTP method 추가는 hot reload 못 잡음**
+- `route.ts`에 `GET` 새로 export하면 dev 서버 reload만으로는 405 그대로. 프로세스 재시작 필요 (`Ctrl+C` → `npm run dev`).
+
+**`next dev -H 0.0.0.0` + `NextResponse.redirect(new URL("/path", request.url))`의 host 누수**
+- listen address가 `0.0.0.0`이면 `request.url`의 host도 `0.0.0.0`. 사용자가 `127.0.0.1`로 접근해도 redirect Location이 `http://0.0.0.0:3000/...`로 떨어져 supabase auth cookie scope가 깨짐(host 다른 origin으로 인식).
+- 해결: `lib/http/origin.ts`의 `requestOrigin(request)` — Host 헤더를 우선 사용. signout/callback 등 absolute URL이 필요한 redirect는 모두 이걸 통해.
+
+**drizzle-orm raw `sql` 템플릿은 `Date` 자동 캐스팅 안 함**
+- `db.execute(sql\`... ${someDate} ...\`)` 패턴에서 `Date` 객체를 그대로 넘기면 postgres-js가 `ERR_INVALID_ARG_TYPE`로 거부. `someDate.toISOString()`으로 변환 + `${iso}::timestamptz` 명시 캐스트.
+- drizzle ORM의 `db.insert(...).values({ ts: new Date() })` 같은 객체 빌더 경로는 자동 변환되므로 영향 없음. raw `sql` 템플릿에서만 발생.

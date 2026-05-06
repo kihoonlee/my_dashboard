@@ -1,35 +1,33 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 
-function LoginContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/";
-  const code = searchParams.get("code");
-  const [exchanging, setExchanging] = useState<boolean>(false);
+function sanitizeNext(raw: string | null): string {
+  if (!raw) return "/";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "/";
+  if (raw.startsWith("/auth/")) return "/"; // 무한 재귀 방지
+  return raw;
+}
 
-  // Defensive: Supabase가 redirectTo를 정확히 매칭 못해 /auth/callback이 아닌 /auth/login으로
-  // code를 들고 떨어뜨리는 케이스를 처리. 정상 흐름은 /auth/callback route handler 사용.
+function LoginContent() {
+  const searchParams = useSearchParams();
+  const next = sanitizeNext(searchParams.get("next"));
+  const code = searchParams.get("code");
+
+  // PKCE code_verifier는 서버 cookie(httpOnly)에 저장되어 있어 client에서 exchange 불가능.
+  // /auth/login에 ?code가 떨어진 케이스(이론상 proxy.ts에서 차단되지만 defense-in-depth)는
+  // 그대로 /auth/callback?code=... 로 server forward해 정규 흐름에 합류시킨다.
   useEffect(() => {
     if (!code) return;
-    setExchanging(true);
-    console.log("[auth/login fallback] exchanging code, document.cookie:", document.cookie);
-    const supabase = createSupabaseBrowserClient();
-    supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-      if (error) {
-        console.error("[auth/login fallback] exchange failed:", error.message);
-        router.replace(
-          `/auth/error?reason=exchange_failed&description=${encodeURIComponent(error.message)}`,
-        );
-        return;
-      }
-      router.replace(next);
-    });
-  }, [code, next, router]);
+    const url = new URL("/auth/callback", window.location.origin);
+    for (const [k, v] of new URLSearchParams(window.location.search)) {
+      url.searchParams.set(k, v);
+    }
+    window.location.replace(url.toString());
+  }, [code]);
 
   async function handleGoogleSignIn() {
     // next 라우트는 cookie로 전달 (Supabase의 redirect_to allowlist가 query string 매칭이 일관되지
@@ -71,7 +69,7 @@ function LoginContent() {
             로그인
           </h1>
           <p className="text-sm text-muted-foreground">
-            {exchanging
+            {code
               ? "세션을 만드는 중..."
               : "등록된 Google 계정으로만 접근할 수 있습니다."}
           </p>
@@ -79,10 +77,10 @@ function LoginContent() {
 
         <Button
           onClick={handleGoogleSignIn}
-          disabled={exchanging}
+          disabled={!!code}
           className="w-full justify-center h-11"
         >
-          {exchanging ? "처리 중..." : "Google로 계속하기"}
+          {code ? "처리 중..." : "Google로 계속하기"}
         </Button>
 
         <p className="text-xs text-muted-foreground text-center leading-relaxed">
