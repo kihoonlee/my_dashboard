@@ -340,6 +340,29 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 4. 민지에게 "이번 주 어떤 일 있었어?" → 도구 칩 `get_recent_digest`. 헤드라인 + 활성 프로덕트 요약을 답변.
 5. `agent_logs` 테이블에 `trigger='github_digest_*'` 행이 LLM 호출 수만큼 누적.
 
+---
+
+### Phase 6 Agent 관리 페이지 — ✅ 완료
+
+| 항목 | 결과 |
+|---|---|
+| `GET /api/agents/list` — 10명 + 일/월 비용 사용률(`agent_logs` 집계) + 오늘 호출/에러 카운트 + 마지막 호출 시각 | list/route.ts |
+| `GET /api/agents/[name]` — agent 상세 + 30일 통계 + 최근 50건 호출 + 프롬프트 버전 히스토리(전체) | [name]/route.ts |
+| `PATCH /api/agents/[name]` — 화이트리스트 필드만 갱신(`systemPrompt` / `model` / `temperature` / `maxTokens` / `dailyCostLimitUsd` / 등). `systemPrompt` 변경 시 이전 값을 `agent_prompt_versions`에 자동 archive (changeNote 옵션). | [name]/route.ts |
+| `POST /api/agents/[name]/rollback` — 지정 version의 system_prompt를 현재로 복원. 현재 prompt는 새 version으로 archive (롤백 자체도 history). | rollback/route.ts |
+| `/agents` 일람 — 10명 카드 그리드. avatar + 한국어/영문명 + 역할 + 모델 배지 + 활성/일시정지 아이콘 + 일/월 비용 progress bar(80%↑ 빨강) + 오늘 호출/에러 + 마지막 호출 시각. 카드 클릭 → 상세. | (app)/agents/page.tsx |
+| `/agents/[name]` 상세 — 4개 탭: 개요(설명+30일 통계+최근 5건 호출) / 프롬프트(편집 + 변경 메모 + 버전 리스트 펼침/롤백) / 메타(model·temperature·maxTokens·비용 한도·설명·triggerConfig·toolPermissions read-only) / 활동(최근 50건 호출 풀 리스트, 에러 강조). 헤더에서 활성/일시정지 토글. | (app)/agents/[name]/page.tsx |
+| 사이드바 `/agents` 라벨에 ✓ 마크 | sidebar.tsx |
+| `next build` 통과 (23 라우트, +5 라우트). | — |
+
+**검증 시나리오**:
+1. `/agents` 진입 → 10명 카드 노출. 활성 4명(민지·하영·서연·현주)은 ✓, 그 외는 일시정지 아이콘.
+2. 비용 progress bar — 오늘 사용한 agent(민지·하영 등)는 일 한도 대비 % 표시.
+3. 카드 클릭 → 상세. "프롬프트" 탭에서 system_prompt 수정 → "저장" → 즉시 반영 + 버전 히스토리 1행 추가.
+4. 같은 탭에서 새 버전 옆 "롤백" → 이전 prompt 복원.
+5. "메타" 탭에서 maxTokens / 비용 한도 변경 → 저장.
+6. 헤더의 "일시정지" 클릭 → `is_paused_reason='manual'` 셋. 그 agent에 invoke 보내면 guard.ts에서 차단(이미 구현됨).
+
 ### Phase 3 (Week 4-5) — 지식 영역 (서연 + 다솜) + 옵시디언
 
 - 옵시디언 vault GitHub webhook + HMAC 검증 + 임베딩

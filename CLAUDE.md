@@ -78,6 +78,13 @@ npm run db:studio
 - `digest.ts`: Haiku 4.5 기반 LLM 요약. `summarizeRepoActivity` (repo별 1-3문장) / `summarizeHeadline` (전체 종합). prompt caching 활성화. diff 미전송, title만.
 - `sync.ts`: STALE_DAYS=14 자동 분류(active/stale/archived) → active만 활동 fetch → 신규 활동 diff(이미 있는 githubId 제외) → 신규 있는 repo만 LLM 호출 → `github_digests` upsert (period 기반 idempotent) + `agent_logs` 기록(현주 agent_id, trigger=`github_digest_*`). 같은 day 재실행 시 신규 0 → LLM 0 → 비용 ≈ $0.
 
+**Agent 관리** (`/agents` + `/agents/[name]`).
+- 일람: `GET /api/agents/list` (10명 + 일/월 비용 사용률 + 오늘 호출/에러).
+- 상세: `GET /api/agents/[name]` (agent + 30일 stats + 최근 50건 + 프롬프트 버전 히스토리).
+- 갱신: `PATCH /api/agents/[name]` (화이트리스트 필드, system_prompt 변경 시 자동 archive).
+- 롤백: `POST /api/agents/[name]/rollback` body `{ version }` (현재 prompt도 새 version으로 archive).
+- UI 탭: 개요 / 프롬프트(편집·버전 리스트·롤백) / 메타 / 활동.
+
 **Agent 호출 골격** (`app/api/agents/[name]/invoke/route.ts`):
 1. depth 헤더 검사(max 2) + agent 조회 + guard
 2. tool defs = 도메인 tools + (call_agents 권한 있으면) ask_agent
