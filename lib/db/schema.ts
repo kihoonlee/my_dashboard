@@ -433,6 +433,34 @@ export const githubActivity = pgTable(
   ],
 );
 
+// product 단위/전체 헤드라인 단위로 LLM이 생성한 요약. 같은 period(시작 시각) 재계산은 update.
+// productId IS NULL → kind='headline' (전체 종합).
+export const githubDigests = pgTable(
+  "github_digests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    productId: uuid("product_id").references(() => products.id, {
+      onDelete: "cascade",
+    }),
+    kind: text("kind").notNull(),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    summary: text("summary").notNull(),
+    activityCount: integer("activity_count").notNull().default(0),
+    model: text("model").notNull(),
+    costUsd: decimal("cost_usd", { precision: 10, scale: 6 })
+      .notNull()
+      .default("0"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("github_digests_kind_period_idx").on(t.kind, t.periodStart),
+    unique("github_digests_unique").on(t.productId, t.kind, t.periodStart),
+  ],
+);
+
 // ============================================================
 // DEV TOOLS — Claude Skills
 // ============================================================

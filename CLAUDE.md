@@ -58,7 +58,7 @@ npm run db:studio
 - `guard.ts`: `checkBeforeInvoke` (활성/일·월 비용 한도) + `checkAfterInvoke` (5연속 오류 자동 일시정지).
 - `tools/hayoung.ts`: 하영의 도구 6개 — Todo CRUD 4개 + 캘린더 조회 2개.
 - `tools/seoyeon.ts`: 서연의 도구 2개 — `search_notes`(pgvector cosine), `get_note`(filePath).
-- `tools/hyunju.ts`: 현주의 도구 2개 — `list_products`(status 필터 + 30일 활동), `get_product`(slug + 최근 활동).
+- `tools/hyunju.ts`: 현주의 도구 4개 — `get_recent_digest`(헤드라인+활성 product), `get_product_digest`(slug), `list_products`(status 필터), `get_product`(slug + raw 활동).
 - `tools/shared.ts`: 모든 agent에 부여되는 **`ask_agent`** 공통 tool. `agents.toolPermissions.call_agents` 화이트리스트 기반 동적 schema.
 
 **`lib/anthropic/`**.
@@ -73,9 +73,10 @@ npm run db:studio
 - `parser.ts`: gray-matter frontmatter + 인라인 `#태그` + `[[wikilinks]]` 추출. title fallback (frontmatter > 첫 H1 > 파일명).
 - `sync.ts`: scan ↔ DB mtime 비교(1초 buffer) → 변경/신규만 read+parse+embed+upsert + vault에서 사라진 노트 DB 삭제.
 
-**`lib/github/`** — GitHub REST API (Phase 4).
+**`lib/github/`** — GitHub REST API + AI 다이제스트 (Phase 4).
 - `client.ts`: `getGithubToken()` — `GITHUB_PAT` env 우선, 없으면 `gh auth token` CLI fallback (단일 사용자 dev 한정). `githubFetch`로 직접 fetch (Octokit 의존성 회피). `listOrgRepos` / `listRepoCommits` / `listRepoPulls` / `listRepoIssues`.
-- `sync.ts`: repo 메타 → `products` upsert (status는 archived 자동만, 사용자 분류 보존), 30일 commits/PRs/issues → `github_activity` upsert (`type+github_id` unique).
+- `digest.ts`: Haiku 4.5 기반 LLM 요약. `summarizeRepoActivity` (repo별 1-3문장) / `summarizeHeadline` (전체 종합). prompt caching 활성화. diff 미전송, title만.
+- `sync.ts`: STALE_DAYS=14 자동 분류(active/stale/archived) → active만 활동 fetch → 신규 활동 diff(이미 있는 githubId 제외) → 신규 있는 repo만 LLM 호출 → `github_digests` upsert (period 기반 idempotent) + `agent_logs` 기록(현주 agent_id, trigger=`github_digest_*`). 같은 day 재실행 시 신규 0 → LLM 0 → 비용 ≈ $0.
 
 **Agent 호출 골격** (`app/api/agents/[name]/invoke/route.ts`):
 1. depth 헤더 검사(max 2) + agent 조회 + guard

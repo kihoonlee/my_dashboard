@@ -301,6 +301,45 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 2. 카드의 status 드롭다운으로 active/paused/idea로 분류 — 다음 sync에서도 보존.
 3. 민지에게 "최근 활발한 프로덕트 뭐야?" → 현주 위임 → `list_products` 호출.
 
+---
+
+### Phase 4-2 GitHub 다이제스트 보고 시스템 — ✅ 완료 (칸반 폐기 → 요약 보고)
+
+**Why**: Phase 4-1 칸반은 사용자 의도와 어긋남. 사용자가 원하는 건 "신규 커밋이 어떤 기능 했는지 요약 보고 + 활성 프로젝트 식별 + 토큰 가드". 27 repo 모두 매 sync마다 LLM 돌리는 건 컨텍스트 폭발 위험.
+
+**정책 (사용자 답변)**:
+- Stale 임계 = **14일** (마지막 push 14일+ → 활동 수집 skip, 메타만 갱신)
+- 요약 단위 = **Repo별 + 전체 헤드라인** (active repo마다 1회 + 마지막 1회)
+- /business = **다이제스트 화면으로 교체** (칸반 폐기)
+- 비용 가드 = **자동 진행 + 사후 표시** (토스트에 LLM 호출 수 + $ 누적)
+
+| 항목 | 결과 |
+|---|---|
+| `lib/db/schema.ts` — `github_digests` 테이블 (productId nullable=headline / kind / periodStart / summary / activityCount / model / costUsd). unique(productId, kind, periodStart)로 idempotent. | schema |
+| `lib/github/digest.ts` — `summarizeRepoActivity` / `summarizeHeadline` (Haiku 4.5 + prompt caching). diff 미전송, title/메시지만. 1-3문장 한국어. | digest.ts |
+| `lib/github/sync.ts` 재구성 — STALE_DAYS=14 분류 → active만 활동 fetch → 신규 활동 diff(SELECT existing) → 신규 있는 repo만 LLM → digests upsert → headline 1회. agent_logs에 trigger='github_digest_repo'/'_headline' 기록(현주 agent_id). 응답에 totalCostUsd / llmCalls / activeRepos / staleRepos / headline 포함. | sync.ts |
+| `GET /api/business/digests` — 헤드라인 + 활성 product digest(DISTINCT ON 최신 1행씩) + stale 메타 리스트. | digests/route.ts |
+| `POST /api/sync/github` — settings_json.lastGithubSync에 비용·LLM·repo 카운트 누적. | sync/github/route.ts |
+| `/business` 페이지 완전 교체 — 헤드라인 카드(Sparkles 아이콘) + 활성 카드 그리드(요약 텍스트) + 오래된 프로젝트 접힌 섹션 + 동기화 결과 토스트(LLM 호출 수, $, 신규 활동 수). | (app)/business/page.tsx |
+| `lib/agents/tools/hyunju.ts` — 도구 4개: `get_recent_digest`(최신 헤드라인+products), `get_product_digest(slug)`, `list_products(status?)`, `get_product(slug)`. 다이제스트 우선 안내. | hyunju.ts |
+| `app/api/business/products/[id]/route.ts` 폐기 — status는 sync 시 자동 분류만(`active`/`stale`/`archived`). 사용자 수동 분류 제거. | — |
+| `next build` 통과 (19 라우트, PATCH -1 / digests +1). | — |
+
+**효율화 포인트**:
+- Stale 14일 필터 → 27 → ~15 active repo로 LLM 호출 절반.
+- 신규 활동 0건이면 LLM 호출 자체 skip (idempotent).
+- Prompt caching으로 시스템 prompt cache hit (반복 호출 시 input 90% 절감).
+- diff 미전송, title만 → repo당 input ~2K tokens 캡.
+- Haiku 4.5 → Sonnet 대비 1/3 가격.
+- 예상 비용: sync 1회 ~$0.05 미만.
+
+**검증 시나리오**:
+1. `/business` 진입 → "GitHub 동기화" 클릭. 토스트에 `27개 repo (active N, stale M, archived K) · 신규 활동 X건 · LLM 호출 Y회 · $0.0xxx` 노출.
+2. 헤드라인 카드 + 활성 카드 N개(각: 1-3문장 요약)가 표시.
+3. 같은 day 재 sync → 신규 활동 0 → LLM 호출 0 → 비용 ≈ $0.
+4. 민지에게 "이번 주 어떤 일 있었어?" → 도구 칩 `get_recent_digest`. 헤드라인 + 활성 프로덕트 요약을 답변.
+5. `agent_logs` 테이블에 `trigger='github_digest_*'` 행이 LLM 호출 수만큼 누적.
+
 ### Phase 3 (Week 4-5) — 지식 영역 (서연 + 다솜) + 옵시디언
 
 - 옵시디언 vault GitHub webhook + HMAC 검증 + 임베딩

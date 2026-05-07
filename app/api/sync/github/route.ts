@@ -35,15 +35,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // settings_json에 마지막 sync 시각·지표 기록
+  // settings_json에 마지막 sync 시각·지표 기록 (UI 헤더에서 사용)
   try {
     const userId = await ensureUser(user);
     const summaryForJson = {
       at: new Date().toISOString(),
       org: summary.org,
       repos: summary.repos,
-      productsUpserted: summary.productsUpserted,
-      activitiesUpserted: summary.activitiesUpserted,
+      activeRepos: summary.activeRepos,
+      staleRepos: summary.staleRepos,
+      archivedRepos: summary.archivedRepos,
+      newActivities: summary.newActivities,
+      llmCalls: summary.llmCalls,
+      totalCostUsd: summary.totalCostUsd,
       errors: summary.errors.slice(0, 5),
     };
     await db
