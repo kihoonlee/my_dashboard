@@ -1,6 +1,6 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-06 (Phase 2B 캘린더 1차 + 인증 흐름 정리 + 자동 동기화 UX)**
+> 최종 업데이트: **2026-05-07 (Phase 5 전체 완료 — Gmail/정연 + 뉴스/민영 + 수민)**
 > 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
 > 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md`
 
@@ -12,7 +12,7 @@
 
 - **유형**: 개인 프로젝트 (kihoonlee 계정)
 - **로드맵**: 10주 풀빌드 (기획서 그대로) + 11-12주 버퍼
-- **현재 위치**: **Phase 2B 캘린더 1차 완료** (OAuth refresh token pgcrypto 암호화 저장 + Calendar sync API + 하영 캘린더 tool 2개 + /today 캘린더 위젯). Phase 2B 잔여: Realtime 스트리밍, ⌘K, Cron.
+- **현재 위치**: **Phase 5 전체 완료** — 정연(Gmail+AI 분류) / 민영(RSS+데일리 브리핑) / 수민(목표·습관·Year in Pixels·주간 회고). 활성 Agent 4 → **7명** (혜원·하영·서연·현주 + 정연·민영·수민). 비활성 2: 다솜·도연.
 
 ---
 
@@ -342,6 +342,81 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 
 ---
 
+### Phase 5-A Gmail + 정연 — ✅ 완료
+
+| 항목 | 결과 |
+|---|---|
+| OAuth scope 확장 — `gmail.readonly` 추가 (Calendar와 동일 패턴) | `app/auth/login/page.tsx` |
+| `lib/google/gmail.ts` — listMessages / getMessageMeta / getThread + header/parseFrom 헬퍼 | gmail.ts |
+| `lib/gmail/classify.ts` — Haiku 4.5로 메일 N건씩 batch 분류 (urgent/important/normal/promotion) + needsReply + 한 줄 요약. summarizeThread 별도 함수. JSON 응답 파싱 + fallback. | classify.ts |
+| `lib/gmail/sync.ts` — `in:inbox -category:promotions newer_than:7d` 기본 쿼리 → 신규만 fetch + upsert → 미분류 행 최대 20건 분류 → agent_logs 기록(정연 agent_id, trigger=`gmail_classify`) + `users.settings_json.lastGmailSync` | sync.ts |
+| `POST /api/sync/gmail` — 412 reauth_required, /today와 동일 패턴 | route.ts |
+| `GET /api/mail/list?priority=&includeRead=&limit=` — UI 캐시 read | route.ts |
+| `lib/agents/tools/jeongyeon.ts` — 4개 도구: `count_by_priority` / `list_recent_mails` / `get_mail` / `summarize_thread` | jeongyeon.ts |
+| `/mail` 페이지 — 우선순위 필터 칩(전체/긴급/중요/일반/광고) + 메일 리스트(읽음/미읽음 강조 + 답장 필요 배지) + 동기화 버튼 + 5분 throttle 자동 sync + 정연 채팅 | app/(app)/mail/page.tsx |
+| invoke route에 jeongyeon 등록 | route.ts |
+
+**비용 가드**:
+- 분류는 한 sync에 최대 20건만 (CLASSIFY_LIMIT). 배치 10건씩 → LLM 호출 ≤ 2회.
+- 캐시 히트로 시스템 prompt 90% 절감. 일반 sync 1회 ~$0.005-0.02.
+- 동기화 토스트에 `신규 N건 / 분류 M건 / $X.XXXX` 표시.
+
+**검증 시나리오**:
+1. Google Cloud Console OAuth 동의 화면에 `gmail.readonly` scope 추가 등록.
+2. `/auth/login` 재로그인 (Gmail 동의 화면 새로 떠야 함 — `prompt=consent` 덕분).
+3. `/mail` 진입 → 자동 동기화 → 분류된 메일 + 우선순위 필터 작동.
+4. 민지에게 "시급한 메일 뭐 있어?" → 정연 위임 → `count_by_priority` 호출 후 `list_recent_mails(priority=urgent)`.
+
+### Phase 5-B 뉴스 + 민영 — ✅ 완료
+
+| 항목 | 결과 |
+|---|---|
+| `lib/news/rss.ts` — RSS 2.0 + Atom 1.0 미니 파서 (regex 기반, 의존성 없음). CDATA/HTML 태그/entity 디코딩. | rss.ts |
+| `lib/news/sync.ts` — 활성 source별 fetch + 신규 url diff + news_items upsert. AI 호출 없음 (별도 generate_briefing). | sync.ts |
+| `lib/news/briefing.ts` — Haiku 4.5로 최근 24h 항목을 카테고리별 그룹 + 한 줄 요약. JSON 응답. `daily_briefings` upsert (date PK). agent_logs 기록(민영 agent_id, trigger=`news_briefing`). | briefing.ts |
+| `POST /api/sync/news` — RSS 일괄 동기화 | route.ts |
+| `POST /api/news/briefing` — 오늘자 브리핑 생성 / `GET` — 조회 | briefing/route.ts |
+| `GET/POST/DELETE /api/news/sources` — 사용자 RSS source 관리 | sources/route.ts |
+| `GET /api/news/items?category=&hours=&limit=` — UI용 최근 항목 | items/route.ts |
+| `lib/agents/tools/minyoung.ts` — 4개 도구: `get_today_briefing` / `generate_briefing` / `list_recent_news` / `list_sources` | minyoung.ts |
+| `/news` 페이지 — 데일리 브리핑 카드(인트로 + 카테고리별 항목 + URL) + 최근 수집 리스트 + RSS source 관리 폼(접힘/펼침) + 민영 채팅 | app/(app)/news/page.tsx |
+| invoke route에 minyoung 등록 | route.ts |
+
+**비용 / 효율**:
+- RSS 동기화 자체엔 LLM 0회. 브리핑 생성 시 Haiku 1회 (~$0.01).
+- 같은 날 재생성은 덮어쓰기 — 의도적 (저녁에 다시 생성 = 하루 두 번 정도 가정).
+- 신규 항목 0건이면 generate_briefing은 빈 인트로 + 빈 sections 반환 (호출 비용 ~$0).
+
+**검증 시나리오**:
+1. `/news` 페이지에서 `Source 관리` → RSS URL 1-3개 등록 (예: techcrunch.com/feed).
+2. `RSS 동기화` 클릭 → 신규 항목이 "최근 수집"에 노출.
+3. `브리핑 생성` 클릭 → 카테고리별 정리된 카드 + 각 항목의 URL 클릭 가능.
+4. 민지에게 "오늘 뉴스 뭐 있어?" → 민영 위임 → `get_today_briefing` 호출. 없으면 `generate_briefing`.
+
+### Phase 5-C 수민 (목표·회고·습관·Year in Pixels) — ✅ 완료
+
+| 항목 | 결과 |
+|---|---|
+| `lib/reviews/weekly.ts` — 한 주 자동 집계(완료 Todo, 습관 완료율, GitHub commit, 옵시디언 변경) + Sonnet 4.6 회고 (한 단락 + 제안 1-3개). `weekly_reviews` upsert (weekStart PK). agent_logs(수민, trigger=`weekly_review`). | weekly.ts |
+| `app/api/goals/route.ts` (GET/POST) + `[id]/route.ts` (PATCH/DELETE) | — |
+| `app/api/habits/route.ts` (GET 14일 완료율 / POST) + `[id]/route.ts` (PATCH archive / DELETE) + `log/route.ts` (POST upsert) | — |
+| `app/api/year-pixels/route.ts` (GET 연도별 / POST mood upsert + score → color 자동) | — |
+| `app/api/weekly-reviews/route.ts` (GET 단일 + 8주 history / POST generate) | — |
+| `lib/agents/tools/soomin.ts` — 10개 도구: list_goals / create_goal / update_goal_progress / list_habits / log_habit / get_habit_stats / get_year_pixels / set_mood / get_weekly_review / generate_weekly_review | soomin.ts |
+| `/goals` 페이지 — 4탭 UI: 목표(진행률 슬라이더) / 습관(오늘 체크 + 14일 완료율) / Year in Pixels(12개월 × 31칸 그리드, 클릭 시 prompt로 mood 1-5) / 주간 회고(자동 집계 stats + AI 요약 + 제안 + "다시 생성" 버튼) + 수민 채팅 | app/(app)/goals/page.tsx |
+| invoke route에 soomin 등록 | route.ts |
+| 사이드바 `/goals`/`/news`/`/mail` 모두 ✓ 마크 | sidebar.tsx |
+
+**검증 시나리오**:
+1. `/goals` 진입 → "목표" 탭에서 분기 목표 1-2개 추가, 진행률 슬라이더 작동.
+2. "습관" 탭에서 매일 체크. 14일 완료율 자동 갱신.
+3. "Year in Pixels" 탭에서 오늘 mood 1-5 선택 → 그리드에 색깔 셀 노출.
+4. "주간 회고" 탭에서 "회고 생성" → 자동 집계 4개 stats + 한 단락 요약 + 제안 표시. 비용 ~$0.02.
+5. 민지에게 "이번 주 어땠어?" → 수민 위임 → `get_weekly_review` 또는 `generate_weekly_review`.
+
+**한 가지 알림 (사용자 작업 필요)**:
+- `db:seed`는 conflict 시 `systemPrompt` 갱신을 건너뛴다 (사용자의 /agents 편집 보존). Phase 5에서 정연/민영/수민의 시드 prompt를 정밀화했으나, 기존 행에는 적용되지 않음. 적용하려면 `/agents/<name>` → 프롬프트 탭에서 직접 갱신하거나, definitions.ts의 `systemPrompt` 값을 복사해서 저장. 새 도구는 `tools` 배열로 LLM에 전달되므로 prompt와 별개로 즉시 작동함.
+
 ### Phase 6 Agent 관리 페이지 — ✅ 완료
 
 | 항목 | 결과 |
@@ -530,17 +605,17 @@ supabase        ^2.98.1
 ## 9. 1차 완료 체크리스트 (기획서 §12)
 
 - [x] Google 로그인 작동, 본인 이메일만 허용 *(Phase 0 Day 4 + Phase 2B PKCE 정리)*
-- [~] 10명의 Agent 모두 응답 가능 — **활성 4/10** (민지·하영·서연·현주). 정연·민영·수민·다솜·도연·혜원은 Phase 5+에서 도구 추가 예정.
+- [~] 10명의 Agent 모두 응답 가능 — **활성 8/10** (민지·혜원·하영·서연·현주·정연·민영·수민). 비활성 2: 다솜·도연.
 - [x] 민지 채팅으로 다른 Agent 호출 가능 *(Phase 2A ask_agent)*
 - [x] Agent 관리 페이지에서 10명 모두 제어 가능 *(Phase 6 — /agents)*
 - [ ] 홈 대시보드 AI 팀 위젯에서 각 Agent 상태 확인 + 클릭 진입 *(Phase 6 보조)*
 - [x] 프롬프트 버전 롤백 작동 *(Phase 6 — /agents/[name] 프롬프트 탭)*
 - [x] 비용 한도 초과 시 자동 일시정지 *(Phase 1 — guard.ts)*
 - [x] 옵시디언 vault 동기화 + 검색 작동 *(Phase 3 — 로컬 Mac vault, OpenAI 임베딩)*
-- [~] 캘린더·메일 동기화 — **캘린더 ✅ Phase 2B**, 메일 Phase 5
+- [x] 캘린더·메일 동기화 — **캘린더 Phase 2B + Gmail Phase 5-A**
 - [x] 13(27)개 프로덕트 GitHub 활동 다이제스트 *(Phase 4-2)*
-- [ ] 데일리 뉴스 브리핑 매일 생성 *(Phase 5-B)*
-- [ ] 매주 일요일 회고 자동 생성 *(Phase 5-C)*
+- [x] 데일리 뉴스 브리핑 — 수동 트리거(`/news` 브리핑 생성). cron 자동화는 Phase 7. *(Phase 5-B)*
+- [x] 매주 회고 — 수동 트리거(`/goals` 회고 생성). cron 자동화는 Phase 7. *(Phase 5-C)*
 - [ ] 모바일 반응형 (iPad 이상) *(Phase 7)*
 - [ ] Lighthouse Performance 80+ *(Phase 7)*
 
@@ -550,34 +625,36 @@ supabase        ^2.98.1
 
 ---
 
-## 10. 다음 즉시 액션 (Phase 6 끝 → Phase 5 진입 준비)
+## 10. 다음 즉시 액션 (Phase 5 끝 → Phase 7 진입 준비)
 
-Phase 2B/3/4-2/6 모두 완료. 다음 후보 우선순위순:
+Phase 2B/3/4-2/5/6 모두 완료. 활성 Agent 8/10. 1차 완료 체크리스트 12/14 ✓.
 
 ```
-[Phase 5 — Week 8 정보 수집]
-  5-A. Gmail 동기화 + 정연 분류
-       → 기존 Google OAuth scope에 gmail.readonly 추가 (Calendar 패턴 동일)
-       → 정연 도구: list_recent_mails / classify_priority / summarize_thread
-       → /mail 페이지: 우선순위별 요약 보고
-  5-B. 뉴스 브리핑 + 민영
-       → RSS 3소스(사용자 결정) + 새벽 5시 cron(Phase 7로) + 민영 도구
-       → /news 페이지: 일별 다이제스트
-  5-C. 수민 (목표·회고·습관·Year in Pixels)
-       → 분기 목표 + 주간 회고 + 일일 습관 + Year in Pixels 시각화
-       → /goals 페이지 + 일요일 회고 자동 생성
+[즉시 사용자 작업 (Phase 5-A 검증을 위한 외부 설정)]
+  A. Google Cloud Console OAuth 동의 화면에 `gmail.readonly` scope 등록
+     → Test users 모드면 체크박스 노출
+  B. /auth/login 재로그인 (Gmail 동의 화면 새로 떠야 함)
+  C. /mail 진입 → Gmail 동기화 + AI 분류 작동 확인
+  D. /news 페이지 → RSS source 1-3개 등록 → 동기화 → 브리핑 생성
+  E. /goals 페이지 → 목표·습관 등록 → 회고 생성
 
-[Phase 6 보조 — 홈 대시보드]
-  - Hero에 AI 팀 상태 위젯 (10명 활성/일시정지 + 일일 비용 합산 + 최근 활동)
+[프롬프트 갱신 (선택)]
+  - definitions.ts의 정연/민영/수민 systemPrompt가 정밀화됐으나 db:seed는 conflict 시 prompt 갱신 안 함.
+  - /agents/<englishName> → 프롬프트 탭에서 직접 갱신하거나, 새 도구는 prompt와 별개로 즉시 작동하므로 그냥 두어도 OK.
+
+[Phase 6 보조 — 홈 대시보드 (Phase 7 전 옵션)]
+  - Hero에 AI 팀 상태 위젯 (8명 활성 + 일일 비용 합산 + 최근 활동 5건)
   - 혜원 종합 브리핑 자동 트리거 (체크리스트 #5)
 
-[Phase 7 — Week 10 마감]
-  - Vercel Cron (혜원 7시 / 민영 5시 / 수민 일요일 21시 / Calendar·Gmail 5분 / GitHub 1시간)
+[Phase 7 — Week 10 마감 (가장 굵은 다음 단계)]
+  - Vercel Cron — 혜원 7시 / 민영 5시 / 수민 일요일 21시 / Calendar·Gmail 5분 / GitHub 1시간
+    → 위 cron이 Phase 5의 데일리 브리핑·주간 회고·메일 분류를 자동화 (현재는 수동 트리거)
   - Sentry + Rate limiting
   - 모바일 반응형 (iPad+)
   - Lighthouse 80+
+  - Supabase production 프로젝트 새로 생성 + RLS 정책 추가
 
-추천: 5-A (Gmail) — 매일 가치 가장 큼, OAuth scope 확장만으로 빠른 시작.
+추천: Phase 7 진입 전 사용자 검증 1주일. 실제 사용해보면서 Agent 응답 품질·비용·UX 다듬기.
 ```
 
 ---
