@@ -15,7 +15,6 @@ import {
   Briefcase,
   Wrench,
   Newspaper,
-  Mail,
   Bot,
   Settings,
 } from "lucide-react";
@@ -37,7 +36,6 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/business", label: "사업·프로덕트", icon: Briefcase, phase: "Phase 4 ✓" },
   { href: "/dev", label: "개발 도구", icon: Wrench, phase: "Phase 4" },
   { href: "/news", label: "뉴스 브리핑", icon: Newspaper, phase: "Phase 5 ✓" },
-  { href: "/mail", label: "메일", icon: Mail, phase: "Phase 5 ✓" },
   { href: "/agents", label: "AI 팀 (10명)", icon: Bot, phase: "Phase 6 ✓" },
   { href: "/settings", label: "설정", icon: Settings, phase: "Phase 7" },
 ];

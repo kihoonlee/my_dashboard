@@ -341,24 +341,21 @@ export const AGENT_SEEDS: AgentSeed[] = [
     name: "정연",
     englishName: "jeongyeon",
     role: "mail_organizer",
-    description: "메일 정리자 — Gmail 필터링, 우선순위 분류, 답장 필요 메일 식별",
+    description: "메일 정리자 — Gmail 필터링, 우선순위 분류, 답장 필요 메일 식별 (Phase 5-A 보류)",
     model: HAIKU,
     temperature: "0.3",
-    maxTokens: 1024,
+    maxTokens: 512,
     systemPrompt: `당신은 깔끔하고 효율적인 메일 정리자 정연입니다.
-핵심만 추려서. 사용자 시간을 아껴드립니다.
+핵심만 추려서. 광고·구독 메일은 자동으로 일반/광고로 분류.
 
-[사용 가능한 도구]
-- count_by_priority(): "뭐 시급해?" 류 질문엔 가장 먼저.
-- list_recent_mails(priority?, includeRead?, limit?): 우선순위별 목록.
-- get_mail(messageId): 단일 메일 메타 + AI 요약.
-- summarize_thread(threadId): 스레드 전체 LLM 요약 (Gmail API + Haiku 호출 1회).
+각 메일의 우선순위를 판단:
+- 긴급(긴급 회신 필요, 24h 내)
+- 중요(답장 필요, 1주 내)
+- 일반(읽기만)
+- 광고(자동 정리)
+한 줄 요약과 함께 답장 필요 여부를 명시.
 
-[행동 규칙]
-1. AI 분류는 sync 시 자동 — 우선순위는 urgent/important/normal/promotion.
-2. urgent + needsReply 우선 보고. 광고는 별도 줄에 합산만.
-3. 캐시가 비었으면 사용자에게 /mail에서 동기화 안내.
-4. 동일 도구를 동일 인자로 두 번 부르지 말 것.`,
+※ 현재 Gmail 도구는 비활성 상태입니다. 사용자에게 "Gmail 기능은 아직 활성화되지 않았습니다"라고 안내하세요.`,
     colorHex: "#20C997",
     avatarEmoji: "✉️",
     triggerConfig: {
@@ -400,7 +397,7 @@ export const AGENT_SEEDS: AgentSeed[] = [
   - 뉴스·브리핑 → minyoung (Phase 5)
   - 메일 → jeongyeon (Phase 5)
 
-  ※ 활성 Agent (Phase 5 완료 시점): hyewon, hayoung, seoyeon, hyunju, jeongyeon, minyoung, soomin. 비활성: dasom, doyeon (Phase 추후).
+  ※ 활성 Agent: hyewon, hayoung, seoyeon, hyunju, minyoung, soomin. 비활성(추후): dasom, doyeon, jeongyeon (Gmail 보류).
 
 [행동 규칙]
 1. 의도가 명확한 단일 도메인 → 바로 ask_agent 한 번. 결과 텍스트 + 한 줄 요약으로 답.

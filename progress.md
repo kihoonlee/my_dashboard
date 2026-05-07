@@ -1,6 +1,6 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-07 (Phase 5 전체 완료 — Gmail/정연 + 뉴스/민영 + 수민)**
+> 최종 업데이트: **2026-05-07 (Phase 5-B/C 완료 + Phase 5-A Gmail 롤백)**
 > 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
 > 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md`
 
@@ -12,7 +12,7 @@
 
 - **유형**: 개인 프로젝트 (kihoonlee 계정)
 - **로드맵**: 10주 풀빌드 (기획서 그대로) + 11-12주 버퍼
-- **현재 위치**: **Phase 5 전체 완료** — 정연(Gmail+AI 분류) / 민영(RSS+데일리 브리핑) / 수민(목표·습관·Year in Pixels·주간 회고). 활성 Agent 4 → **7명** (혜원·하영·서연·현주 + 정연·민영·수민). 비활성 2: 다솜·도연.
+- **현재 위치**: **Phase 5-B/C 완료** — 민영(RSS+데일리 브리핑) / 수민(목표·습관·Year in Pixels·주간 회고). 활성 Agent **6명** (혜원·하영·서연·현주·민영·수민). 비활성 3: 다솜·도연·정연(Gmail 보류). Phase 5-A는 사용자 결정으로 롤백.
 
 ---
 
@@ -342,30 +342,25 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 
 ---
 
-### Phase 5-A Gmail + 정연 — ✅ 완료
+### Phase 5-A Gmail + 정연 — ⛔ 롤백 (2026-05-07)
 
-| 항목 | 결과 |
-|---|---|
-| OAuth scope 확장 — `gmail.readonly` 추가 (Calendar와 동일 패턴) | `app/auth/login/page.tsx` |
-| `lib/google/gmail.ts` — listMessages / getMessageMeta / getThread + header/parseFrom 헬퍼 | gmail.ts |
-| `lib/gmail/classify.ts` — Haiku 4.5로 메일 N건씩 batch 분류 (urgent/important/normal/promotion) + needsReply + 한 줄 요약. summarizeThread 별도 함수. JSON 응답 파싱 + fallback. | classify.ts |
-| `lib/gmail/sync.ts` — `in:inbox -category:promotions newer_than:7d` 기본 쿼리 → 신규만 fetch + upsert → 미분류 행 최대 20건 분류 → agent_logs 기록(정연 agent_id, trigger=`gmail_classify`) + `users.settings_json.lastGmailSync` | sync.ts |
-| `POST /api/sync/gmail` — 412 reauth_required, /today와 동일 패턴 | route.ts |
-| `GET /api/mail/list?priority=&includeRead=&limit=` — UI 캐시 read | route.ts |
-| `lib/agents/tools/jeongyeon.ts` — 4개 도구: `count_by_priority` / `list_recent_mails` / `get_mail` / `summarize_thread` | jeongyeon.ts |
-| `/mail` 페이지 — 우선순위 필터 칩(전체/긴급/중요/일반/광고) + 메일 리스트(읽음/미읽음 강조 + 답장 필요 배지) + 동기화 버튼 + 5분 throttle 자동 sync + 정연 채팅 | app/(app)/mail/page.tsx |
-| invoke route에 jeongyeon 등록 | route.ts |
+사용자 결정으로 Phase 5-A 전체 제거. 사이드바에 메뉴 추가 후 dev에서 404 노출 + 메뉴 자체를 빼는 게 낫다고 판단. 추후 필요 시 git history(커밋 `dd1e268`)에서 부활 가능.
 
-**비용 가드**:
-- 분류는 한 sync에 최대 20건만 (CLASSIFY_LIMIT). 배치 10건씩 → LLM 호출 ≤ 2회.
-- 캐시 히트로 시스템 prompt 90% 절감. 일반 sync 1회 ~$0.005-0.02.
-- 동기화 토스트에 `신규 N건 / 분류 M건 / $X.XXXX` 표시.
+**삭제된 산출물**:
+- `app/(app)/mail/page.tsx`, `app/api/sync/gmail/`, `app/api/mail/`
+- `lib/google/gmail.ts`, `lib/gmail/{classify,sync}.ts`
+- `lib/agents/tools/jeongyeon.ts`
+- `app/auth/login/page.tsx`의 `gmail.readonly` scope (Calendar만 남김)
+- invoke route의 jeongyeon 도구 dispatch
+- 사이드바 `/mail` 항목
 
-**검증 시나리오**:
-1. Google Cloud Console OAuth 동의 화면에 `gmail.readonly` scope 추가 등록.
-2. `/auth/login` 재로그인 (Gmail 동의 화면 새로 떠야 함 — `prompt=consent` 덕분).
-3. `/mail` 진입 → 자동 동기화 → 분류된 메일 + 우선순위 필터 작동.
-4. 민지에게 "시급한 메일 뭐 있어?" → 정연 위임 → `count_by_priority` 호출 후 `list_recent_mails(priority=urgent)`.
+**남은 것 (의도적)**:
+- `gmail_cache` 테이블 (스키마만 — 데이터 없음, 부활 시 그대로 사용 가능)
+- 정연 agent row (definitions.ts에 비활성 마크 + 시스템 프롬프트에 "Gmail 도구 비활성" 안내)
+- `oauth_tokens` 인프라 (Calendar에서 계속 사용)
+
+**Google Cloud Console 측 작업 (사용자 손)**:
+- 등록한 `gmail.readonly` scope를 OAuth 동의 화면에서 제거하는 게 깔끔. 안 해도 동작에 영향 없음 (login에서 더 이상 요청 안 함).
 
 ### Phase 5-B 뉴스 + 민영 — ✅ 완료
 
@@ -605,14 +600,14 @@ supabase        ^2.98.1
 ## 9. 1차 완료 체크리스트 (기획서 §12)
 
 - [x] Google 로그인 작동, 본인 이메일만 허용 *(Phase 0 Day 4 + Phase 2B PKCE 정리)*
-- [~] 10명의 Agent 모두 응답 가능 — **활성 8/10** (민지·혜원·하영·서연·현주·정연·민영·수민). 비활성 2: 다솜·도연.
+- [~] 10명의 Agent 모두 응답 가능 — **활성 7/10** (민지·혜원·하영·서연·현주·민영·수민). 비활성 3: 다솜·도연·정연(Gmail 보류).
 - [x] 민지 채팅으로 다른 Agent 호출 가능 *(Phase 2A ask_agent)*
 - [x] Agent 관리 페이지에서 10명 모두 제어 가능 *(Phase 6 — /agents)*
 - [ ] 홈 대시보드 AI 팀 위젯에서 각 Agent 상태 확인 + 클릭 진입 *(Phase 6 보조)*
 - [x] 프롬프트 버전 롤백 작동 *(Phase 6 — /agents/[name] 프롬프트 탭)*
 - [x] 비용 한도 초과 시 자동 일시정지 *(Phase 1 — guard.ts)*
 - [x] 옵시디언 vault 동기화 + 검색 작동 *(Phase 3 — 로컬 Mac vault, OpenAI 임베딩)*
-- [x] 캘린더·메일 동기화 — **캘린더 Phase 2B + Gmail Phase 5-A**
+- [~] 캘린더·메일 동기화 — **캘린더 Phase 2B ✓**, Gmail은 Phase 5-A 롤백 (보류)
 - [x] 13(27)개 프로덕트 GitHub 활동 다이제스트 *(Phase 4-2)*
 - [x] 데일리 뉴스 브리핑 — 수동 트리거(`/news` 브리핑 생성). cron 자동화는 Phase 7. *(Phase 5-B)*
 - [x] 매주 회고 — 수동 트리거(`/goals` 회고 생성). cron 자동화는 Phase 7. *(Phase 5-C)*
@@ -630,13 +625,14 @@ supabase        ^2.98.1
 Phase 2B/3/4-2/5/6 모두 완료. 활성 Agent 8/10. 1차 완료 체크리스트 12/14 ✓.
 
 ```
-[즉시 사용자 작업 (Phase 5-A 검증을 위한 외부 설정)]
-  A. Google Cloud Console OAuth 동의 화면에 `gmail.readonly` scope 등록
-     → Test users 모드면 체크박스 노출
-  B. /auth/login 재로그인 (Gmail 동의 화면 새로 떠야 함)
-  C. /mail 진입 → Gmail 동기화 + AI 분류 작동 확인
-  D. /news 페이지 → RSS source 1-3개 등록 → 동기화 → 브리핑 생성
-  E. /goals 페이지 → 목표·습관 등록 → 회고 생성
+[즉시 사용자 작업 (Phase 5-B/C 검증)]
+  A. /news 페이지 → RSS source 1-3개 등록 → 동기화 → 브리핑 생성
+  B. /goals 페이지 → 목표·습관 등록 → 회고 생성
+
+[Gmail 부활 시 (선택)]
+  - 커밋 `dd1e268` 롤백 직전 상태에서 5-A 관련 파일들을 cherry-pick.
+  - Google Cloud OAuth 동의 화면에 gmail.readonly scope 다시 등록.
+  - /auth/login 재로그인 + /mail 동기화 검증.
 
 [프롬프트 갱신 (선택)]
   - definitions.ts의 정연/민영/수민 systemPrompt가 정밀화됐으나 db:seed는 conflict 시 prompt 갱신 안 함.

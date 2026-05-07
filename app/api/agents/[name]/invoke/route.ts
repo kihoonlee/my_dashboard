@@ -31,7 +31,6 @@ import { checkAfterInvoke, checkBeforeInvoke } from "@/lib/agents/guard";
 import { HAYOUNG_TOOLS, runHayoungTool } from "@/lib/agents/tools/hayoung";
 import { SEOYEON_TOOLS, runSeoyeonTool } from "@/lib/agents/tools/seoyeon";
 import { HYUNJU_TOOLS, runHyunjuTool } from "@/lib/agents/tools/hyunju";
-import { JEONGYEON_TOOLS, runJeongyeonTool } from "@/lib/agents/tools/jeongyeon";
 import { MINYOUNG_TOOLS, runMinyoungTool } from "@/lib/agents/tools/minyoung";
 import { SOOMIN_TOOLS, runSoominTool } from "@/lib/agents/tools/soomin";
 import { makeAskAgentTool, runAskAgent } from "@/lib/agents/tools/shared";
@@ -83,9 +82,6 @@ function getAgentTools(
   } else if (englishName === "hyunju") {
     domainTools = HYUNJU_TOOLS;
     runDomainTool = runHyunjuTool;
-  } else if (englishName === "jeongyeon") {
-    domainTools = JEONGYEON_TOOLS;
-    runDomainTool = runJeongyeonTool;
   } else if (englishName === "minyoung") {
     domainTools = MINYOUNG_TOOLS;
     runDomainTool = runMinyoungTool;
