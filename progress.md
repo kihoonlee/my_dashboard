@@ -342,6 +342,23 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 
 ---
 
+### Skills 자동 동기화 — ✅ 완료 (2026-05-07)
+
+| 항목 | 결과 |
+|---|---|
+| `lib/skills/scanner.ts` — `~/.claude/skills/<name>/SKILL.md` 1뎁스 스캔. 심볼릭 링크 따라가기, gray-matter로 frontmatter 파싱 (description/category/version/tags 추출) | scanner.ts |
+| `lib/skills/sync.ts` — 스캔 ↔ DB(`scope='global'`) diff. 신규=insert / 변경=update(usageCount·lastUsedAt 보존) / 누락=delete (단 `filePath`가 rootPath 하위인 경우만). `users.settings_json.lastSkillsSync` 기록 | sync.ts |
+| `POST /api/sync/skills` — `CLAUDE_SKILLS_PATH` env 우선, 기본 `~/.claude/skills` | route.ts |
+| `/dev` 페이지 — 진입 시 5분 throttle 자동 sync (localStorage 기반), 헤더에 동기화 버튼 + 마지막 동기화 시각, 동기화 후 토스트(스캔/신규/업데이트/삭제) | app/(app)/dev/page.tsx |
+
+**동작 시나리오**:
+1. `~/.claude/skills/`에 새 skill(`<name>/SKILL.md`) 추가 → `/dev` 진입 시 자동 sync → DB에 INSERT.
+2. 기존 skill의 `SKILL.md` frontmatter(description 등) 변경 → 다음 sync 시 UPDATE.
+3. skill 디렉토리 삭제 → 다음 sync 시 DB에서 DELETE (단, frontmatter 외부에서 추가한 사용자 데이터 — usageCount/lastUsedAt은 사라짐).
+4. 5분 이내 재진입 시 sync skip (localStorage 타임스탬프). 수동 동기화는 항상 실행.
+
+**현재 디스크 상태 (참고)**: `~/.claude/skills/` 하위 ~61개 디렉토리.
+
 ### 홈 대시보드 위젯 — ✅ 완료 (2026-05-07)
 
 | 항목 | 결과 |

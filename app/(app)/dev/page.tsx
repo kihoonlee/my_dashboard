@@ -2,20 +2,25 @@
 
 // /dev — 도연 개발 도구 관리자.
 // Claude Code skills 카탈로그 + 통계 + 도연 채팅.
+// 진입 시 ~/.claude/skills 자동 동기화 (5분 throttle).
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AgentBadge } from "@/components/agent-badge";
 import {
   CheckCircle2,
   Loader2,
   Plus,
+  RefreshCw,
   Trash2,
   Wrench,
   XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { streamSseFetch } from "@/lib/sse/client";
+
+const AUTO_SYNC_STALE_MS = 5 * 60 * 1000; // 5분
+const LAST_SYNC_STORAGE_KEY = "myhub:lastSkillsSync";
 
 type Skill = {
   id: string;
@@ -77,6 +82,48 @@ export default function DevPage() {
   const [chatInput, setChatInput] = useState<string>("");
   const [streaming, setStreaming] = useState<boolean>(false);
 
+  const [syncing, setSyncing] = useState<boolean>(false);
+  const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+  const [justSynced, setJustSynced] = useState<{
+    inserted: number;
+    updated: number;
+    removed: number;
+    scanned: number;
+  } | null>(null);
+  const autoSyncDecidedRef = useRef(false);
+
+  async function syncSkills() {
+    if (syncing) return;
+    setSyncing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/sync/skills", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.message ?? data?.error ?? `status ${res.status}`);
+      }
+      const now = Date.now();
+      setLastSyncAt(now);
+      try {
+        localStorage.setItem(LAST_SYNC_STORAGE_KEY, String(now));
+      } catch {
+        // storage 비활성 환경 — 무시
+      }
+      setJustSynced({
+        inserted: data.inserted ?? 0,
+        updated: data.updated ?? 0,
+        removed: data.removed ?? 0,
+        scanned: data.scanned ?? 0,
+      });
+      await Promise.all([fetchSkills(), fetchStats()]);
+      setTimeout(() => setJustSynced(null), 5000);
+    } catch (e) {
+      setError(`Skills 동기화 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSyncing(false);
+    }
+  }
+
   async function fetchSkills() {
     try {
       const params = new URLSearchParams();
@@ -100,8 +147,24 @@ export default function DevPage() {
   }
 
   useEffect(() => {
-    void fetchSkills();
-    void fetchStats();
+    void (async () => {
+      // localStorage에서 마지막 sync 시각 복원
+      let lastTs = 0;
+      try {
+        const raw = localStorage.getItem(LAST_SYNC_STORAGE_KEY);
+        lastTs = raw ? parseInt(raw, 10) || 0 : 0;
+      } catch {
+        // 무시
+      }
+      if (lastTs > 0) setLastSyncAt(lastTs);
+
+      await Promise.all([fetchSkills(), fetchStats()]);
+
+      if (autoSyncDecidedRef.current) return;
+      autoSyncDecidedRef.current = true;
+      const stale = !lastTs || Date.now() - lastTs > AUTO_SYNC_STALE_MS;
+      if (stale) void syncSkills();
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => {
@@ -242,13 +305,38 @@ export default function DevPage() {
 
   return (
     <div className="flex flex-col gap-8 p-6 max-w-5xl mx-auto w-full">
-      <header className="flex items-center gap-3">
+      <header className="flex items-center gap-3 flex-wrap">
         <AgentBadge englishName="doyeon" size="lg" showName={false} />
-        <div>
+        <div className="flex-1 min-w-0">
           <h1 className="text-2xl font-bold tracking-tight">개발 도구</h1>
           <p className="text-sm text-muted-foreground">
             도연이 Claude Code skill 카탈로그와 사용 패턴을 정리해드려요.
           </p>
+        </div>
+        <div className="flex items-center gap-3 ml-auto">
+          {lastSyncAt && (
+            <span className="text-[11px] text-muted-foreground font-mono">
+              마지막 동기화{" "}
+              {new Date(lastSyncAt).toLocaleTimeString("ko-KR", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </span>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={syncSkills}
+            disabled={syncing}
+            className="gap-2"
+          >
+            {syncing ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="h-3.5 w-3.5" />
+            )}
+            ~/.claude/skills 동기화
+          </Button>
         </div>
       </header>
 
@@ -260,6 +348,12 @@ export default function DevPage() {
       {info && (
         <div className="text-xs text-primary bg-primary/10 border border-primary/20 rounded-lg px-3 py-2">
           {info}
+        </div>
+      )}
+      {justSynced && (
+        <div className="text-xs text-primary bg-primary/10 border border-primary/20 rounded-lg px-3 py-2">
+          동기화 완료 — 스캔 {justSynced.scanned}건 · 신규 {justSynced.inserted} ·
+          업데이트 {justSynced.updated} · 삭제 {justSynced.removed}
         </div>
       )}
 
