@@ -9,7 +9,6 @@ import { usePathname } from "next/navigation";
 import {
   Home,
   CheckSquare,
-  Calendar,
   Target,
   BookOpen,
   Briefcase,
@@ -29,8 +28,7 @@ type MenuItem = {
 
 const MENU_ITEMS: MenuItem[] = [
   { href: "/", label: "홈", icon: Home, phase: "Phase 0/2" },
-  { href: "/today", label: "오늘", icon: CheckSquare, phase: "Phase 1" },
-  { href: "/calendar", label: "캘린더", icon: Calendar, phase: "Phase 2" },
+  { href: "/today", label: "오늘", icon: CheckSquare, phase: "Phase 1 (캘린더 위젯 포함)" },
   { href: "/goals", label: "목표·회고", icon: Target, phase: "Phase 5 ✓" },
   { href: "/knowledge", label: "지식·옵시디언", icon: BookOpen, phase: "Phase 3 ✓" },
   { href: "/business", label: "사업·프로덕트", icon: Briefcase, phase: "Phase 4 ✓" },
