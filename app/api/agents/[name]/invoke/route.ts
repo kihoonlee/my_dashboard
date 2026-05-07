@@ -33,6 +33,8 @@ import { SEOYEON_TOOLS, runSeoyeonTool } from "@/lib/agents/tools/seoyeon";
 import { HYUNJU_TOOLS, runHyunjuTool } from "@/lib/agents/tools/hyunju";
 import { MINYOUNG_TOOLS, runMinyoungTool } from "@/lib/agents/tools/minyoung";
 import { SOOMIN_TOOLS, runSoominTool } from "@/lib/agents/tools/soomin";
+import { DASOM_TOOLS, runDasomTool } from "@/lib/agents/tools/dasom";
+import { DOYEON_TOOLS, runDoyeonTool } from "@/lib/agents/tools/doyeon";
 import { makeAskAgentTool, runAskAgent } from "@/lib/agents/tools/shared";
 
 const MAX_ITERATIONS = 5;
@@ -88,6 +90,12 @@ function getAgentTools(
   } else if (englishName === "soomin") {
     domainTools = SOOMIN_TOOLS;
     runDomainTool = runSoominTool;
+  } else if (englishName === "dasom") {
+    domainTools = DASOM_TOOLS;
+    runDomainTool = runDasomTool;
+  } else if (englishName === "doyeon") {
+    domainTools = DOYEON_TOOLS;
+    runDomainTool = runDoyeonTool;
   }
 
   const callAgents = permissions.call_agents ?? [];

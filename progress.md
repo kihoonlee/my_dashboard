@@ -1,6 +1,6 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-07 (Phase 5-B/C 완료 + Phase 5-A Gmail 롤백)**
+> 최종 업데이트: **2026-05-07 (다솜·도연 활성화 — 활성 Agent 9/10)**
 > 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
 > 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md`
 
@@ -12,7 +12,7 @@
 
 - **유형**: 개인 프로젝트 (kihoonlee 계정)
 - **로드맵**: 10주 풀빌드 (기획서 그대로) + 11-12주 버퍼
-- **현재 위치**: **Phase 5-B/C 완료** — 민영(RSS+데일리 브리핑) / 수민(목표·습관·Year in Pixels·주간 회고). 활성 Agent **6명** (혜원·하영·서연·현주·민영·수민). 비활성 3: 다솜·도연·정연(Gmail 보류). Phase 5-A는 사용자 결정으로 롤백.
+- **현재 위치**: **다솜·도연 활성화 완료** — 다솜(캡처/읽을거리/학습) + 도연(Claude Skills 카탈로그). 활성 Agent **9/10** (민지·혜원·하영·서연·현주·민영·수민·다솜·도연). 비활성 1: 정연(Gmail 보류).
 
 ---
 
@@ -342,6 +342,32 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 
 ---
 
+### 다솜 + 도연 활성화 — ✅ 완료 (2026-05-07)
+
+| 항목 | 결과 |
+|---|---|
+| `lib/captures/categorize.ts` — Haiku로 캡처 1건 분류(JSON: category/summary/confidence). | categorize.ts |
+| `lib/agents/tools/dasom.ts` — 9개 도구: create/list/categorize/move_capture + add/list/mark_read read_later + add/list learnings | dasom.ts |
+| API: `/api/captures(/:id)` (categorize/move) / `/api/read-later(/:id)` / `/api/learnings` | route.ts × 5 |
+| `/capture` 페이지 — 3탭(캡처/읽을거리/학습) + 입력 폼 + 다솜 분류 버튼 + Todo/ReadLater/Learning 이동 + 다솜 채팅 | app/(app)/capture/page.tsx |
+| `lib/agents/tools/doyeon.ts` — 7개 도구: list/get/add/update/delete_skill + log_skill_usage + get_skill_stats | doyeon.ts |
+| API: `/api/skills(/:id)` + `/api/skills/stats` | route.ts × 3 |
+| `/dev` 페이지 — Stats 4카드 + Skill 등록 폼 + 카탈로그 + 도연 채팅 | app/(app)/dev/page.tsx |
+| invoke route — dasom/doyeon dispatch 추가 | route.ts |
+| 사이드바 — `/capture`(캡처·읽을거리, Inbox 아이콘) 추가, `/dev` 라벨 ✓ | sidebar.tsx |
+| definitions.ts — 다솜·도연·민지 systemPrompt 정밀화 (도구 사용 가이드 포함) | definitions.ts |
+
+**비용**:
+- 다솜 캡처 분류는 사용자 트리거(LLM 호출 1건당 ~$0.0005, Haiku)
+- 도연 도구는 LLM 호출 없음 (메타데이터 CRUD만)
+
+**검증 시나리오**:
+1. `/capture` → "캡처" 탭에서 메모 입력 → "다솜 분류" 버튼 → ai_category 자동 채워짐.
+2. `/capture` → URL 입력 후 "→ 읽을거리" 또는 "읽을거리" 탭에서 직접 추가.
+3. `/dev` → Skill 1-2개 등록 → 통계 카드에 카운트 갱신.
+4. 민지에게 "방금 적은 거 분류해줘" → 다솜 위임 → categorize_capture.
+5. 민지에게 "안 쓰는 skill 정리하자" → 도연 위임 → get_skill_stats.
+
 ### Phase 5-A Gmail + 정연 — ⛔ 롤백 (2026-05-07)
 
 사용자 결정으로 Phase 5-A 전체 제거. 사이드바에 메뉴 추가 후 dev에서 404 노출 + 메뉴 자체를 빼는 게 낫다고 판단. 추후 필요 시 git history(커밋 `dd1e268`)에서 부활 가능.
@@ -600,7 +626,7 @@ supabase        ^2.98.1
 ## 9. 1차 완료 체크리스트 (기획서 §12)
 
 - [x] Google 로그인 작동, 본인 이메일만 허용 *(Phase 0 Day 4 + Phase 2B PKCE 정리)*
-- [~] 10명의 Agent 모두 응답 가능 — **활성 7/10** (민지·혜원·하영·서연·현주·민영·수민). 비활성 3: 다솜·도연·정연(Gmail 보류).
+- [~] 10명의 Agent 모두 응답 가능 — **활성 9/10** (민지·혜원·하영·서연·현주·민영·수민·다솜·도연). 비활성 1: 정연(Gmail 보류).
 - [x] 민지 채팅으로 다른 Agent 호출 가능 *(Phase 2A ask_agent)*
 - [x] Agent 관리 페이지에서 10명 모두 제어 가능 *(Phase 6 — /agents)*
 - [ ] 홈 대시보드 AI 팀 위젯에서 각 Agent 상태 확인 + 클릭 진입 *(Phase 6 보조)*
@@ -625,9 +651,11 @@ supabase        ^2.98.1
 Phase 2B/3/4-2/5/6 모두 완료. 활성 Agent 8/10. 1차 완료 체크리스트 12/14 ✓.
 
 ```
-[즉시 사용자 작업 (Phase 5-B/C 검증)]
+[즉시 사용자 작업 (검증)]
   A. /news 페이지 → RSS source 1-3개 등록 → 동기화 → 브리핑 생성
   B. /goals 페이지 → 목표·습관 등록 → 회고 생성
+  C. /capture 페이지 → 메모 캡처 → 다솜 분류 → 이동
+  D. /dev 페이지 → skill 등록 → 도연 통계 확인
 
 [Gmail 부활 시 (선택)]
   - 커밋 `dd1e268` 롤백 직전 상태에서 5-A 관련 파일들을 cherry-pick.
