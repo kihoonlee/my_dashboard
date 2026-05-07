@@ -529,26 +529,60 @@ supabase        ^2.98.1
 
 ## 9. 1차 완료 체크리스트 (기획서 §12)
 
-- [ ] Google 로그인 작동, 본인 이메일만 허용 *(Day 4)*
-- [ ] 10명의 Agent 모두 응답 가능 *(Phase 1-5)*
-- [ ] 민지 채팅으로 다른 Agent 호출 가능 *(Phase 2)*
-- [ ] Agent 관리 페이지에서 10명 모두 제어 가능 *(Phase 6)*
-- [ ] 홈 대시보드 AI 팀 위젯에서 각 Agent 상태 확인 + 클릭 진입 *(Phase 6)*
-- [ ] 프롬프트 버전 롤백 작동 *(Phase 6)*
-- [ ] 비용 한도 초과 시 자동 일시정지 *(Phase 1)*
-- [ ] 옵시디언 GitHub 동기화 + 검색 작동 *(Phase 3)*
-- [ ] 캘린더·메일 동기화 작동 *(Phase 2, 5)*
-- [ ] 13개 프로덕트 GitHub 활동 표시 *(Phase 4)*
-- [ ] 데일리 뉴스 브리핑 매일 생성 *(Phase 5)*
-- [ ] 매주 일요일 회고 자동 생성 *(Phase 5)*
+- [x] Google 로그인 작동, 본인 이메일만 허용 *(Phase 0 Day 4 + Phase 2B PKCE 정리)*
+- [~] 10명의 Agent 모두 응답 가능 — **활성 4/10** (민지·하영·서연·현주). 정연·민영·수민·다솜·도연·혜원은 Phase 5+에서 도구 추가 예정.
+- [x] 민지 채팅으로 다른 Agent 호출 가능 *(Phase 2A ask_agent)*
+- [x] Agent 관리 페이지에서 10명 모두 제어 가능 *(Phase 6 — /agents)*
+- [ ] 홈 대시보드 AI 팀 위젯에서 각 Agent 상태 확인 + 클릭 진입 *(Phase 6 보조)*
+- [x] 프롬프트 버전 롤백 작동 *(Phase 6 — /agents/[name] 프롬프트 탭)*
+- [x] 비용 한도 초과 시 자동 일시정지 *(Phase 1 — guard.ts)*
+- [x] 옵시디언 vault 동기화 + 검색 작동 *(Phase 3 — 로컬 Mac vault, OpenAI 임베딩)*
+- [~] 캘린더·메일 동기화 — **캘린더 ✅ Phase 2B**, 메일 Phase 5
+- [x] 13(27)개 프로덕트 GitHub 활동 다이제스트 *(Phase 4-2)*
+- [ ] 데일리 뉴스 브리핑 매일 생성 *(Phase 5-B)*
+- [ ] 매주 일요일 회고 자동 생성 *(Phase 5-C)*
 - [ ] 모바일 반응형 (iPad 이상) *(Phase 7)*
 - [ ] Lighthouse Performance 80+ *(Phase 7)*
 
+### 운영 인프라 보강 — ✅ 완료
+
+- [x] **`tsTz` 헬퍼** (`lib/db/sql-utils.ts`) — drizzle raw `sql\`\``의 Date 캐스팅 함정 3회 재발 후 통일. 잔여 inline `${iso}::timestamptz` 0건 (commit `5b9fa4e`).
+
 ---
 
-## 10. 다음 즉시 액션 (Phase 2B 잔여 → Phase 3 진입 준비)
+## 10. 다음 즉시 액션 (Phase 6 끝 → Phase 5 진입 준비)
 
-Phase 2B 캘린더 1차 완료. 다음 후보:
+Phase 2B/3/4-2/6 모두 완료. 다음 후보 우선순위순:
+
+```
+[Phase 5 — Week 8 정보 수집]
+  5-A. Gmail 동기화 + 정연 분류
+       → 기존 Google OAuth scope에 gmail.readonly 추가 (Calendar 패턴 동일)
+       → 정연 도구: list_recent_mails / classify_priority / summarize_thread
+       → /mail 페이지: 우선순위별 요약 보고
+  5-B. 뉴스 브리핑 + 민영
+       → RSS 3소스(사용자 결정) + 새벽 5시 cron(Phase 7로) + 민영 도구
+       → /news 페이지: 일별 다이제스트
+  5-C. 수민 (목표·회고·습관·Year in Pixels)
+       → 분기 목표 + 주간 회고 + 일일 습관 + Year in Pixels 시각화
+       → /goals 페이지 + 일요일 회고 자동 생성
+
+[Phase 6 보조 — 홈 대시보드]
+  - Hero에 AI 팀 상태 위젯 (10명 활성/일시정지 + 일일 비용 합산 + 최근 활동)
+  - 혜원 종합 브리핑 자동 트리거 (체크리스트 #5)
+
+[Phase 7 — Week 10 마감]
+  - Vercel Cron (혜원 7시 / 민영 5시 / 수민 일요일 21시 / Calendar·Gmail 5분 / GitHub 1시간)
+  - Sentry + Rate limiting
+  - 모바일 반응형 (iPad+)
+  - Lighthouse 80+
+
+추천: 5-A (Gmail) — 매일 가치 가장 큼, OAuth scope 확장만으로 빠른 시작.
+```
+
+---
+
+### 옛 메모 (Phase 2B 진입 시점 — 보존용 참고)
 
 ```
 [Phase 2B 잔여 — 우선순위순]
