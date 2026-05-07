@@ -285,6 +285,15 @@ export default function GoalsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ weekStart: reviewWeekStart }),
       });
+      // 응답이 JSON이 아니면 (HTML 에러 페이지 등) 더 구체적으로 안내
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        const text = await res.text();
+        const truncated = text.slice(0, 200).replace(/\s+/g, " ");
+        throw new Error(
+          `서버가 JSON 대신 ${contentType || "비-JSON"}을(를) 반환 (status ${res.status}). 본문: ${truncated}…`,
+        );
+      }
       const data = await res.json();
       if (!res.ok)
         throw new Error(data?.message ?? data?.error ?? `status ${res.status}`);

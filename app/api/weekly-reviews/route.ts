@@ -58,28 +58,42 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const supabase = await createSupabaseServerClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  let body: { weekStart?: string };
   try {
-    body = await request.json().catch(() => ({}));
-  } catch {
-    body = {};
-  }
+    const supabase = await createSupabaseServerClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
 
-  try {
-    const r = await generateWeeklyReview(body.weekStart);
-    return NextResponse.json({ ok: true, ...r });
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
+    let body: { weekStart?: string } = {};
+    try {
+      body = (await request.json().catch(() => ({}))) as {
+        weekStart?: string;
+      };
+    } catch {
+      body = {};
+    }
+
+    try {
+      const r = await generateWeeklyReview(body.weekStart);
+      return NextResponse.json({ ok: true, ...r });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const stack = e instanceof Error ? e.stack : undefined;
+      console.error("[weekly-reviews POST] generate failed:", msg, stack);
+      return NextResponse.json(
+        { error: "generate_failed", message: msg },
+        { status: 500 },
+      );
+    }
+  } catch (outer) {
+    // 어떤 경우에도 HTML이 아닌 JSON으로 회신 (Next.js 기본 dev error overlay 우회)
+    const msg = outer instanceof Error ? outer.message : String(outer);
+    console.error("[weekly-reviews POST] outer crash:", msg, outer);
     return NextResponse.json(
-      { error: "generate_failed", message: msg },
+      { error: "internal", message: msg },
       { status: 500 },
     );
   }
