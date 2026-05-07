@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { calendarEventsCache, users } from "@/lib/db/schema";
+import { tsTz } from "@/lib/db/sql-utils";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureUser } from "@/lib/users/ensure";
 import {
@@ -115,11 +116,9 @@ export async function POST() {
   }
 
   // 윈도우 시작점 이전의 stale 이벤트 정리 (지난 일정은 캐시에 두지 않음 — 하영이 헷갈리지 않게)
-  // postgres-js raw sql은 Date 자동 캐스팅 안 하므로 ISO 문자열 + ::timestamptz 캐스트.
-  const timeMinIso = timeMin.toISOString();
   const deleted = await db.execute<{ count: number }>(sql`
     WITH d AS (
-      DELETE FROM calendar_events_cache WHERE start_at < ${timeMinIso}::timestamptz RETURNING 1
+      DELETE FROM calendar_events_cache WHERE start_at < ${tsTz(timeMin)} RETURNING 1
     )
     SELECT count(*)::int AS count FROM d
   `);

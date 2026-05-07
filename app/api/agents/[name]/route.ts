@@ -6,6 +6,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { agents, agentLogs, agentPromptVersions } from "@/lib/db/schema";
+import { tsTz } from "@/lib/db/sql-utils";
 
 type AgentRow = typeof agents.$inferSelect;
 
@@ -60,7 +61,7 @@ export async function GET(
     .orderBy(desc(agentLogs.createdAt))
     .limit(50);
 
-  // 비용 사용률 (당일/당월)
+  // 비용 사용률 (당일/당월).
   const since30d = new Date();
   since30d.setDate(since30d.getDate() - 30);
   const aggRows = (await db.execute<{
@@ -75,7 +76,7 @@ export async function GET(
       COUNT(*) FILTER (WHERE created_at >= date_trunc('day', now()))::int AS daily_calls,
       COUNT(*)::int AS last_30d_calls
     FROM ${agentLogs}
-    WHERE agent_id = ${agent.id} AND created_at >= ${since30d}
+    WHERE agent_id = ${agent.id} AND created_at >= ${tsTz(since30d)}
   `)) as unknown as Array<{
     daily_cost: string;
     monthly_cost: string;

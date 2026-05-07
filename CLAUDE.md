@@ -173,9 +173,15 @@ URL `?session=<uuid>`로 세션 재진입(히스토리 GET). 클라이언트는 
 - `drizzle.config.ts`의 `strict: true` + 에이전트/CI 등 non-TTY 환경 → 인터랙티브 confirm 못 받아서 실패. `npm run db:push:force`(`--force`) 사용.
 - 파괴적이지 않은 일상 dev에선 force 안전, 운영 마이그레이션 시점엔 별도 generate + 리뷰.
 
-**drizzle-orm raw `sql` 템플릿은 `Date` 자동 캐스팅 안 함**
-- `db.execute(sql\`... ${someDate} ...\`)` 패턴에서 `Date` 객체를 그대로 넘기면 postgres-js가 `ERR_INVALID_ARG_TYPE`로 거부. `someDate.toISOString()`으로 변환 + `${iso}::timestamptz` 명시 캐스트.
-- drizzle ORM의 `db.insert(...).values({ ts: new Date() })` 같은 객체 빌더 경로는 자동 변환되므로 영향 없음. raw `sql` 템플릿에서만 발생.
+**drizzle-orm raw `sql` 템플릿은 `Date` 자동 캐스팅 안 함 — `tsTz()` 헬퍼 강제**
+- `db.execute(sql\`... ${someDate} ...\`)` 패턴에서 `Date` 객체를 그대로 넘기면 postgres-js가 `ERR_INVALID_ARG_TYPE`로 거부. **3번 재발한 함정** (oauth_tokens insert / calendar stale delete / agents stats).
+- 절대 inline으로 `${date.toISOString()}::timestamptz`를 다시 박지 말 것. **항상 `lib/db/sql-utils.ts`의 `tsTz(date)` 사용**:
+  ```ts
+  import { tsTz } from "@/lib/db/sql-utils";
+  await db.execute(sql\`... WHERE created_at >= ${tsTz(since)}\`);
+  ```
+- `tsTz`는 null/undefined도 받아 `NULL::timestamptz` 반환. date(only)는 `dateLiteral`.
+- drizzle ORM의 `db.insert(...).values({ts: new Date()})` 같은 객체 빌더 경로는 자동 변환되므로 영향 없음. raw `sql` 템플릿에서만 발생.
 
 **`.env.local`의 등호 뒤 공백은 값에 그대로 포함됨**
 - `KEY= value` 처럼 `=` 다음에 공백을 넣으면 `process.env.KEY` 값이 `" value"`(앞 공백 포함)로 들어감. dotenv 표준은 trim 안 함.
