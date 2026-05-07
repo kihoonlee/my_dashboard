@@ -8,18 +8,27 @@
 //   - get_year_pixels(year?), set_mood(date, score, note?)
 //   - get_weekly_review(weekStart?) — 저장된 회고 조회
 //   - generate_weekly_review(weekStart?) — 새로 생성 (LLM 호출)
+//   - daily_insight() — 오늘자 모티베이션 (Haiku, 캐시 우선)
+//   - coach_habit(habitName | habitId, struggle?) — 단일 습관 분석 + 조언 (Sonnet)
+//   - add_habit_note(habitId, note, date?) — habit_log.note 저장
 
 import { db } from "@/lib/db/client";
 import {
   goals,
   habits,
   habitLogs,
+  users,
   weeklyReviews,
   yearPixels,
 } from "@/lib/db/schema";
-import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { AgentTool } from "@/lib/anthropic/client";
 import { generateWeeklyReview } from "@/lib/reviews/weekly";
+import { generateDailyInsight, type InsightResult } from "@/lib/insights/daily";
+import { coachHabit } from "@/lib/insights/coach";
+import { completionRate14d } from "@/lib/habits/streak";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { ensureUser } from "@/lib/users/ensure";
 
 export const SOOMIN_TOOLS: AgentTool[] = [
   {
@@ -147,6 +156,54 @@ export const SOOMIN_TOOLS: AgentTool[] = [
       properties: {
         weekStart: { type: "string", description: "YYYY-MM-DD (선택)" },
       },
+    },
+  },
+  {
+    name: "daily_insight",
+    description:
+      "오늘자 데일리 인사이트(한 문장 동기부여)를 반환. 캐시(users.settings_json.todayInsight) 우선, 없으면 Haiku로 새로 생성(~$0.001). 사용자가 '오늘 영감 줘' / '한 마디 해줘' 류로 물을 때 또는 자체 판단 시.",
+    input_schema: {
+      type: "object",
+      properties: {
+        force: {
+          type: "boolean",
+          description: "true면 캐시 무시하고 새로 생성 (기본 false)",
+        },
+      },
+    },
+  },
+  {
+    name: "coach_habit",
+    description:
+      "단일 습관에 대한 패턴 분석 + 작은 행동 제안 (Sonnet, ~$0.02). 사용자가 '이 습관 막혔어' / '안 지켜져' 같이 호소하거나, 14d 완료율이 낮은 습관에 대해 능동적으로 조언할 때.",
+    input_schema: {
+      type: "object",
+      properties: {
+        habitName: {
+          type: "string",
+          description: "습관 이름 (대소문자 정확히 일치하지 않아도 됨, contain 검색)",
+        },
+        habitId: { type: "string", description: "habit UUID (habitName 대신)" },
+        struggle: {
+          type: "string",
+          description:
+            "사용자가 적은 어려움 (선택). 예: '저녁이 되면 잊어버려요'",
+        },
+      },
+    },
+  },
+  {
+    name: "add_habit_note",
+    description:
+      "특정 날짜의 habit_log.note에 메모 저장. completed 상태는 기존 값 유지(없으면 false로 새로 만듦). 사용자가 '오늘 운동에 X라고 메모해줘' 같이 부탁할 때.",
+    input_schema: {
+      type: "object",
+      properties: {
+        habitId: { type: "string" },
+        note: { type: "string" },
+        date: { type: "string", description: "YYYY-MM-DD (선택, 기본 오늘)" },
+      },
+      required: ["habitId", "note"],
     },
   },
 ];
@@ -400,6 +457,225 @@ export async function runSoominTool(
           ok: true,
           result: r,
         };
+      }
+      case "daily_insight": {
+        const today = isoDate(new Date());
+        const force = input.force === true;
+
+        // 사용자 식별 — Supabase 세션
+        const supabase = await createSupabaseServerClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) {
+          return { ok: false, error: "no session — Supabase auth required" };
+        }
+        const userId = await ensureUser(user);
+
+        // 캐시 확인
+        if (!force) {
+          const [u] = await db
+            .select({ settings: users.settingsJson })
+            .from(users)
+            .where(eq(users.id, userId))
+            .limit(1);
+          const stored = (u?.settings as Record<string, unknown> | null)
+            ?.todayInsight as
+            | (InsightResult & { date: string })
+            | undefined;
+          if (stored && stored.date === today) {
+            return {
+              ok: true,
+              result: {
+                insight: stored.insight,
+                focusHabit: stored.focusHabit,
+                tone: stored.tone,
+                source: "cache",
+                date: today,
+              },
+            };
+          }
+        }
+
+        // 컨텍스트 수집
+        const since = new Date();
+        since.setDate(since.getDate() - 14);
+        const sinceIso = isoDate(since);
+
+        const habitRows = await db
+          .select()
+          .from(habits)
+          .where(eq(habits.archived, false))
+          .orderBy(asc(habits.createdAt))
+          .limit(10);
+        const allLogs = await db
+          .select({
+            habitId: habitLogs.habitId,
+            date: habitLogs.date,
+            completed: habitLogs.completed,
+            note: habitLogs.note,
+          })
+          .from(habitLogs)
+          .where(gte(habitLogs.date, sinceIso));
+        const logsByHabit = new Map<
+          string,
+          Array<{ date: string; completed: boolean; note: string | null }>
+        >();
+        for (const l of allLogs) {
+          const arr = logsByHabit.get(l.habitId) ?? [];
+          arr.push(l);
+          logsByHabit.set(l.habitId, arr);
+        }
+        const habitsCtx = habitRows.map((h) => {
+          const logs = (logsByHabit.get(h.id) ?? []).sort((a, b) =>
+            a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
+          );
+          const r = completionRate14d(logs);
+          return { name: h.name, rate14d: r.rate, loggedDays: r.logged };
+        });
+
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const [pixel] = await db
+          .select()
+          .from(yearPixels)
+          .where(eq(yearPixels.date, isoDate(yesterday)))
+          .limit(1);
+
+        const weekStart = isoDate(startOfWeek(new Date()));
+        const [review] = await db
+          .select({ id: weeklyReviews.id })
+          .from(weeklyReviews)
+          .where(eq(weeklyReviews.weekStart, weekStart))
+          .limit(1);
+
+        const result = await generateDailyInsight({
+          habits: habitsCtx,
+          pendingTodos: 0, // 도구 호출에서는 todo 불요 (간단히)
+          yesterdayMood: pixel?.moodScore ?? null,
+          hasWeeklyReview: !!review,
+        });
+
+        // 저장
+        const stored = { ...result, date: today };
+        await db
+          .update(users)
+          .set({
+            settingsJson: sql`
+              COALESCE(${users.settingsJson}, '{}'::jsonb)
+              || jsonb_build_object('todayInsight', ${JSON.stringify(stored)}::jsonb)
+            `,
+          })
+          .where(eq(users.id, userId));
+
+        return {
+          ok: true,
+          result: {
+            insight: result.insight,
+            focusHabit: result.focusHabit,
+            tone: result.tone,
+            source: "generated",
+            date: today,
+            costUsd: result.costUsd,
+          },
+        };
+      }
+      case "coach_habit": {
+        const habitName = asString(input.habitName);
+        const habitId = asString(input.habitId);
+        const struggle = asString(input.struggle);
+        if (!habitName && !habitId) {
+          return { ok: false, error: "habitName or habitId required" };
+        }
+
+        let habit;
+        if (habitId) {
+          [habit] = await db
+            .select()
+            .from(habits)
+            .where(eq(habits.id, habitId))
+            .limit(1);
+        } else {
+          // 이름 contain 검색
+          const all = await db
+            .select()
+            .from(habits)
+            .where(eq(habits.archived, false));
+          habit = all.find(
+            (h) =>
+              h.name === habitName ||
+              h.name.includes(habitName!) ||
+              habitName!.includes(h.name),
+          );
+        }
+        if (!habit) {
+          return {
+            ok: false,
+            error: `habit not found (name=${habitName ?? "-"} id=${habitId ?? "-"})`,
+          };
+        }
+
+        const since = new Date();
+        since.setDate(since.getDate() - 89);
+        const logs = await db
+          .select({
+            date: habitLogs.date,
+            completed: habitLogs.completed,
+            note: habitLogs.note,
+          })
+          .from(habitLogs)
+          .where(
+            and(
+              eq(habitLogs.habitId, habit.id),
+              gte(habitLogs.date, isoDate(since)),
+            ),
+          )
+          .orderBy(asc(habitLogs.date));
+
+        const r = await coachHabit({
+          habitName: habit.name,
+          habitDescription: habit.description,
+          logs,
+          userStruggle: struggle ?? null,
+        });
+
+        return {
+          ok: true,
+          result: {
+            habit: { id: habit.id, name: habit.name },
+            advice: r.text,
+            costUsd: r.costUsd,
+            durationMs: r.durationMs,
+          },
+        };
+      }
+      case "add_habit_note": {
+        const habitId = asString(input.habitId);
+        const note = asString(input.note);
+        if (!habitId || note === undefined) {
+          return { ok: false, error: "habitId and note are required" };
+        }
+        const date = asString(input.date) ?? isoDate(new Date());
+
+        const [existing] = await db
+          .select()
+          .from(habitLogs)
+          .where(
+            and(eq(habitLogs.habitId, habitId), eq(habitLogs.date, date)),
+          )
+          .limit(1);
+
+        if (existing) {
+          await db
+            .update(habitLogs)
+            .set({ note })
+            .where(eq(habitLogs.id, existing.id));
+        } else {
+          await db
+            .insert(habitLogs)
+            .values({ habitId, date, completed: false, note });
+        }
+        return { ok: true, result: { habitId, date, note } };
       }
       default:
         return { ok: false, error: `unknown tool: ${name}` };

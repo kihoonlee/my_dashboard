@@ -1,6 +1,6 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-07 (홈 대시보드 위젯 + 활성 Agent 9/10)**
+> 최종 업데이트: **2026-05-07 (/goals Grit 스타일 개편 — 데일리 인사이트 + 습관 detail + 코칭)**
 > 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
 > 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md`
 
@@ -341,6 +341,41 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 5. `agent_logs` 테이블에 `trigger='github_digest_*'` 행이 LLM 호출 수만큼 누적.
 
 ---
+
+### /goals Grit 스타일 개편 — ✅ 완료 (2026-05-07)
+
+Grit: Improve Daily With AI 컨셉 참고. /goals 4탭(목표/습관/Pixels/회고)을 메인 대시보드(데일리 모티베이션 + 습관 그리드 + 진척 막대) + 보조 3탭(목표/Pixels/회고)으로 재편.
+
+| 항목 | 결과 |
+|---|---|
+| `lib/habits/streak.ts` — 90일 grid + 현재/최장 스트릭 + 14d 완료율 계산 (JS 전용) | streak.ts |
+| `lib/insights/daily.ts` — 수민 데일리 인사이트 생성 (Haiku, JSON, 한 문장 25자, 4-tone). agent_logs 기록(trigger=daily_insight). | daily.ts |
+| `lib/insights/coach.ts` — 단일 습관 코칭 (Sonnet, ~$0.02). 평일/주말 비교 + 패턴 인식 + 작은 행동 + 질문 1개. | coach.ts |
+| `GET /api/habits/dashboard` — 활성 habits + 오늘 status + 스트릭 + 14d % + 주간 평균 한 번에 | route.ts |
+| `GET /api/habits/[id]/details` — 90일 logs + 스트릭 + 14d/90d 완료율 | route.ts |
+| `PATCH /api/habits/[id]/note` — 날짜별 habit_log.note 저장 (없으면 completed=false로 새로 만듦) | route.ts |
+| `GET/POST /api/insights/today` — `users.settings_json.todayInsight` 캐시 조회/생성 | route.ts |
+| 수민 도구 3개 추가: `daily_insight(force?)` / `coach_habit(habitName | habitId, struggle?)` / `add_habit_note(habitId, note, date?)` | soomin.ts |
+| 수민 systemPrompt 정밀화 — 코칭 도구 3종 가이드 추가 | definitions.ts |
+| `<DailyMotivationCard>` — 진입 시 자동 생성 (오늘자 없으면 자동 POST). 4-tone 색상. "다시 받기" 버튼. | components |
+| `<HabitCard>` — 그리드 카드. 메인 영역=토글, 우측 화살표=detail. 스트릭 ⚡ + 14d 미니 progress | components |
+| `<HabitHeatmap>` — 90일 GitHub 스타일 7일×13주 그리드. 노트 있는 날 amber ring. 클릭 → 노트 편집. | components |
+| `/goals/habits/[id]` 신규 — 헤더(스트릭/완료율 stats) + 90일 히트맵 + 노트 리스트 + 수민 코칭 (Sonnet 호출) | page.tsx |
+| `/goals` 재구성 — "습관" 탭 제거, 메인 = 데일리 모티베이션 + 습관 그리드 + 진척. 보조 탭 3개(목표/Pixels/회고) | page.tsx |
+| `next build` 통과 (57 라우트, +5) | — |
+
+**비용**:
+- 데일리 인사이트: Haiku ~$0.001-0.003/회. 매일 1회 자동 = 월 ~$0.05.
+- 습관 코칭: Sonnet ~$0.01-0.03/회. 사용자 명시 호출만.
+- 수민 일일 한도 $1.50, 월 $45 — 충분.
+
+**검증 시나리오**:
+1. `/goals` 진입 → 데일리 모티베이션 카드 자동 생성(첫 진입 시 ~1초) + 오늘의 습관 그리드 + "오늘 N/M 완료" + "이번 주 평균 X%".
+2. 습관 카드 클릭 → 오늘 토글 → 스트릭 +1 갱신.
+3. 카드 우측 화살표 → `/goals/habits/[id]` → 90일 히트맵 + stats 4개 카드.
+4. 히트맵 셀 클릭 → 그 날짜 노트 편집 모달.
+5. "수민 코칭 받기" 버튼 → struggle 적은 후 클릭 → 평일/주말 비교 + 작은 행동 + 질문 노출.
+6. 민지에게 "오늘 영감 줘" → 수민 위임 → daily_insight (캐시 hit이면 그대로).
 
 ### Skills 자동 동기화 — ✅ 완료 (2026-05-07)
 

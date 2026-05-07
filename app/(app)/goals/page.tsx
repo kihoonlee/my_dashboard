@@ -1,6 +1,9 @@
 "use client";
 
-// /goals — 수민 채팅 + 4개 탭: 목표 / 습관 / Year in Pixels / 주간 회고.
+// /goals — Grit 스타일 메인 대시보드.
+// 메인: 데일리 모티베이션 + 오늘 진척 + 습관 카드 그리드.
+// 탭: 목표 / Year in Pixels / 주간 회고 + 수민 채팅.
+// 습관 detail은 /goals/habits/[id]에서.
 
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +20,8 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { streamSseFetch } from "@/lib/sse/client";
+import { DailyMotivationCard } from "@/components/daily-motivation-card";
+import { HabitCard, type DashboardHabit } from "@/components/habit-card";
 
 type Goal = {
   id: string;
@@ -27,18 +32,6 @@ type Goal = {
   progress: number;
   status: string;
   createdAt: string;
-};
-
-type Habit = {
-  id: string;
-  name: string;
-  description: string | null;
-  targetFrequency: string;
-  colorHex: string | null;
-  archived: boolean;
-  completed14d: number;
-  logCount14d: number;
-  completionRate14d: number;
 };
 
 type YearPixel = {
@@ -60,6 +53,18 @@ type WeeklyReview = {
   createdAt: string;
 };
 
+type DashboardData = {
+  today: string;
+  habits: DashboardHabit[];
+  summary: {
+    total: number;
+    completedToday: number;
+    weekRate: number;
+    weekCompleted?: number;
+    weekLogged?: number;
+  };
+};
+
 type ToolEvent = {
   id: string;
   name: string;
@@ -74,7 +79,7 @@ type ChatMessage = {
   meta?: { iterations: number; durationMs: number; costUsd: number };
 };
 
-type Tab = "goals" | "habits" | "pixels" | "review";
+type Tab = "goals" | "pixels" | "review";
 
 const COLOR_BY_SCORE: Record<number, string> = {
   1: "#dc2626",
@@ -102,6 +107,10 @@ export default function GoalsPage() {
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
+  // Dashboard
+  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
+  const [newHabit, setNewHabit] = useState<string>("");
+
   // Chat
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState<string>("");
@@ -114,11 +123,6 @@ export default function GoalsPage() {
     targetDate: "",
   });
 
-  // Habits
-  const [habits, setHabits] = useState<Habit[]>([]);
-  const [newHabit, setNewHabit] = useState<string>("");
-  const today = isoDate(new Date());
-
   // Year in Pixels
   const [year, setYear] = useState<number>(new Date().getFullYear());
   const [pixels, setPixels] = useState<YearPixel[]>([]);
@@ -130,6 +134,19 @@ export default function GoalsPage() {
   const [review, setReview] = useState<WeeklyReview | null>(null);
   const [generatingReview, setGeneratingReview] = useState<boolean>(false);
 
+  const today = isoDate(new Date());
+
+  async function fetchDashboard() {
+    try {
+      const res = await fetch("/api/habits/dashboard", { cache: "no-store" });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const j = (await res.json()) as DashboardData;
+      setDashboard(j);
+    } catch (e) {
+      setError(`습관 대시보드 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
   async function fetchGoals() {
     try {
       const res = await fetch("/api/goals", { cache: "no-store" });
@@ -139,22 +156,13 @@ export default function GoalsPage() {
       setError(`목표 조회 실패: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-  async function fetchHabits() {
-    try {
-      const res = await fetch("/api/habits", { cache: "no-store" });
-      const data = await res.json();
-      setHabits(data.habits ?? []);
-    } catch (e) {
-      setError(`습관 조회 실패: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
   async function fetchPixels(y: number) {
     try {
       const res = await fetch(`/api/year-pixels?year=${y}`, { cache: "no-store" });
       const data = await res.json();
       setPixels(data.pixels ?? []);
     } catch (e) {
-      setError(`Year in Pixels 조회 실패: ${e instanceof Error ? e.message : String(e)}`);
+      setError(`Year in Pixels 실패: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
   async function fetchReview(weekStart: string) {
@@ -170,12 +178,42 @@ export default function GoalsPage() {
   }
 
   useEffect(() => {
+    void fetchDashboard();
     void fetchGoals();
-    void fetchHabits();
     void fetchPixels(year);
     void fetchReview(reviewWeekStart);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Habits ──
+  async function addHabit() {
+    if (!newHabit.trim()) return;
+    try {
+      const res = await fetch("/api/habits", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: newHabit.trim() }),
+      });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      setNewHabit("");
+      await fetchDashboard();
+    } catch (e) {
+      setError(`습관 추가 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+  async function toggleHabit(habitId: string, nextCompleted: boolean) {
+    try {
+      const res = await fetch("/api/habits/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ habitId, completed: nextCompleted, date: today }),
+      });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      await fetchDashboard();
+    } catch (e) {
+      setError(`습관 토글 실패: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
 
   // ── Goals ──
   async function addGoal() {
@@ -217,50 +255,6 @@ export default function GoalsPage() {
       await fetchGoals();
     } catch (e) {
       setError(`목표 삭제 실패: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-
-  // ── Habits ──
-  async function addHabit() {
-    if (!newHabit.trim()) return;
-    try {
-      const res = await fetch("/api/habits", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newHabit.trim() }),
-      });
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      setNewHabit("");
-      await fetchHabits();
-    } catch (e) {
-      setError(`습관 추가 실패: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-  async function logHabit(habitId: string, completed: boolean) {
-    try {
-      const res = await fetch("/api/habits/log", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ habitId, completed, date: today }),
-      });
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      await fetchHabits();
-    } catch (e) {
-      setError(`습관 로그 실패: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-  async function archiveHabit(habitId: string) {
-    if (!confirm("이 습관을 보관 처리하시겠습니까?")) return;
-    try {
-      const res = await fetch(`/api/habits/${habitId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ archived: true }),
-      });
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      await fetchHabits();
-    } catch (e) {
-      setError(`습관 보관 실패: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -389,8 +383,8 @@ export default function GoalsPage() {
     setStreaming(false);
     if (toolUsed) {
       void Promise.all([
+        fetchDashboard(),
         fetchGoals(),
-        fetchHabits(),
         fetchPixels(year),
         fetchReview(reviewWeekStart),
       ]);
@@ -403,6 +397,9 @@ export default function GoalsPage() {
     return map;
   }, [pixels]);
 
+  const summary = dashboard?.summary ?? null;
+  const habits = dashboard?.habits ?? [];
+
   return (
     <div className="flex flex-col gap-8 p-6 max-w-5xl mx-auto w-full">
       <header className="flex items-center gap-3">
@@ -410,7 +407,7 @@ export default function GoalsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">목표 · 회고</h1>
           <p className="text-sm text-muted-foreground">
-            수민이 분기 목표·습관·Year in Pixels·주간 회고를 함께합니다.
+            수민이 매일 인사이트, 습관 코칭, 회고를 함께합니다.
           </p>
         </div>
       </header>
@@ -426,11 +423,67 @@ export default function GoalsPage() {
         </div>
       )}
 
+      {/* 메인: 데일리 모티베이션 */}
+      <DailyMotivationCard />
+
+      {/* 메인: 오늘 진척 + 습관 그리드 */}
+      <section className="flex flex-col gap-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <h2 className="text-lg font-semibold">오늘의 습관</h2>
+          {summary && (
+            <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
+              <span>
+                오늘 <strong className="text-foreground">{summary.completedToday}</strong>/{summary.total}
+              </span>
+              <span>이번 주 평균 {Math.round(summary.weekRate * 100)}%</span>
+            </div>
+          )}
+        </div>
+        {summary && summary.total > 0 && (
+          <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+            <div
+              className="h-full bg-primary transition-all"
+              style={{
+                width: `${(summary.completedToday / Math.max(1, summary.total)) * 100}%`,
+              }}
+            />
+          </div>
+        )}
+
+        <div className="flex items-end gap-2">
+          <input
+            value={newHabit}
+            onChange={(e) => setNewHabit(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") addHabit();
+            }}
+            placeholder="새 습관 (예: 매일 30분 산책)"
+            className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
+          />
+          <Button onClick={addHabit} disabled={!newHabit.trim()} size="sm" className="gap-1.5">
+            <Plus className="h-3.5 w-3.5" />
+            추가
+          </Button>
+        </div>
+
+        {habits.length === 0 ? (
+          <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm text-muted-foreground">
+            아직 등록된 습관이 없습니다.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {habits.map((h) => (
+              <HabitCard key={h.id} habit={h} onToggle={toggleHabit} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* 보조 탭 */}
       <div className="flex items-center gap-1 border-b border-border">
         {(
           [
             ["goals", "목표"],
-            ["habits", "습관"],
             ["pixels", "Year in Pixels"],
             ["review", "주간 회고"],
           ] as const
@@ -475,12 +528,7 @@ export default function GoalsPage() {
                 className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
               />
             </div>
-            <Button
-              onClick={addGoal}
-              disabled={!newGoal.title.trim()}
-              size="sm"
-              className="gap-1.5"
-            >
+            <Button onClick={addGoal} disabled={!newGoal.title.trim()} size="sm" className="gap-1.5">
               <Plus className="h-3.5 w-3.5" />
               추가
             </Button>
@@ -538,71 +586,6 @@ export default function GoalsPage() {
         </section>
       )}
 
-      {tab === "habits" && (
-        <section className="flex flex-col gap-3">
-          <div className="flex items-end gap-2">
-            <div className="flex flex-col gap-1 flex-1">
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                새 습관
-              </label>
-              <input
-                value={newHabit}
-                onChange={(e) => setNewHabit(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") addHabit();
-                }}
-                placeholder="예: 매일 30분 산책"
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
-              />
-            </div>
-            <Button onClick={addHabit} disabled={!newHabit.trim()} size="sm" className="gap-1.5">
-              <Plus className="h-3.5 w-3.5" />
-              추가
-            </Button>
-          </div>
-
-          {habits.length === 0 ? (
-            <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm text-muted-foreground">
-              아직 등록된 습관이 없습니다.
-            </div>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {habits.map((h) => (
-                <li
-                  key={h.id}
-                  className="border border-border rounded-xl bg-card p-3 flex items-center gap-3"
-                >
-                  <button
-                    onClick={() => logHabit(h.id, true)}
-                    className="text-muted-foreground hover:text-primary"
-                    aria-label="오늘 완료"
-                    title="오늘 완료"
-                  >
-                    <CheckCircle2 className="h-5 w-5" />
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium">{h.name}</div>
-                    <div className="text-[11px] text-muted-foreground font-mono">
-                      14일 완료율{" "}
-                      {h.logCount14d > 0
-                        ? `${Math.round(h.completionRate14d * 100)}%`
-                        : "—"}{" "}
-                      ({h.completed14d}/{h.logCount14d})
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => archiveHabit(h.id)}
-                    className="text-muted-foreground hover:text-destructive p-1 rounded text-[11px]"
-                  >
-                    보관
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
       {tab === "pixels" && (
         <section className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
@@ -632,11 +615,7 @@ export default function GoalsPage() {
             </span>
           </div>
 
-          <YearPixelGrid
-            year={year}
-            pixelsByDate={pixelsByDate}
-            onSet={setMood}
-          />
+          <YearPixelGrid year={year} pixelsByDate={pixelsByDate} onSet={setMood} />
 
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <span>오늘 ({today}):</span>
@@ -688,13 +667,13 @@ export default function GoalsPage() {
           {review ? (
             <div className="border border-border rounded-xl bg-card p-4 flex flex-col gap-3">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                <Stat label="완료한 Todo" value={review.todosCompleted} />
-                <Stat
+                <ReviewStat label="완료한 Todo" value={review.todosCompleted} />
+                <ReviewStat
                   label="습관 완료율"
                   value={`${Math.round(parseFloat(review.habitsCompletionRate ?? "0") * 100)}%`}
                 />
-                <Stat label="GitHub 커밋" value={review.githubCommits} />
-                <Stat label="옵시디언 변경" value={review.obsidianNotesCreated} />
+                <ReviewStat label="GitHub 커밋" value={review.githubCommits} />
+                <ReviewStat label="옵시디언 변경" value={review.obsidianNotesCreated} />
               </div>
               {review.aiSummary && (
                 <p className="text-sm leading-relaxed border-t border-border pt-3">
@@ -729,12 +708,13 @@ export default function GoalsPage() {
         </section>
       )}
 
+      {/* 수민 채팅 */}
       <section className="flex flex-col gap-3">
         <h2 className="text-lg font-semibold">수민과 대화</h2>
         <div className="flex flex-col gap-3 min-h-[200px]">
           {messages.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-6">
-              예: &quot;이번 주 회고 만들어줘&quot; / &quot;산책 습관 추가해줘&quot;
+              예: &quot;매일 운동 어떻게 하면 좋을까?&quot; / &quot;이번 주 회고 만들어줘&quot;
             </div>
           ) : (
             messages.map((m, i) => (
@@ -814,7 +794,7 @@ export default function GoalsPage() {
                 send();
               }
             }}
-            placeholder="수민에게 회고·목표·습관을 물어보세요…"
+            placeholder="수민에게 코칭·회고·목표를 물어보세요…"
             disabled={streaming}
             className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
           />
@@ -827,7 +807,7 @@ export default function GoalsPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number | string }) {
+function ReviewStat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="flex flex-col items-center">
       <span className="text-2xl font-bold tabular-nums">{value}</span>
@@ -847,7 +827,6 @@ function YearPixelGrid({
   pixelsByDate: Map<string, YearPixel>;
   onSet: (date: string, score: number) => void;
 }) {
-  // 12개월 × 31칸 그리드 (없는 날은 비워둠)
   const months = Array.from({ length: 12 }, (_, m) => m);
   return (
     <div className="overflow-x-auto">
