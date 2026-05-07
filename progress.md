@@ -1,6 +1,6 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-07 (다솜·도연 활성화 — 활성 Agent 9/10)**
+> 최종 업데이트: **2026-05-07 (홈 대시보드 위젯 + 활성 Agent 9/10)**
 > 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
 > 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md`
 
@@ -342,6 +342,28 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 
 ---
 
+### 홈 대시보드 위젯 — ✅ 완료 (2026-05-07)
+
+| 항목 | 결과 |
+|---|---|
+| `GET /api/dashboard/summary` — 단일 엔드포인트로 4개 위젯 데이터 한 번에 (team / today / activity) | route.ts |
+| `<HomeDashboard>` — 1분 자동 갱신, 3개 위젯 | components/home-dashboard.tsx |
+| TodaySummaryWidget — 미완료 Todo + 오늘 호출/에러 + LLM 비용 합산 + 다음 일정 | 동상 |
+| TeamStatusWidget — 10명 격자, 활성/정지 표시, 일일 비용 progress(80%↑ 빨강), 클릭 → /agents/[name] | 동상 |
+| RecentActivityWidget — agent_logs 8건 timeline (agent badge + trigger + 상대 시간) | 동상 |
+| 홈 페이지 — 기존 placeholder 격자 제거, Hero + Dashboard 구성 | app/(app)/page.tsx |
+
+**효율**:
+- 단일 fetch (4개 분리 호출 → 1회)
+- 1분 polling (사용자가 안 보면 추가 부담 없음, 보고 있으면 신선)
+- LATERAL aggregate로 10 agent × today_logs를 한 SQL에 집계
+
+**검증 시나리오**:
+1. `/` 진입 → 3개 위젯 노출 + 1분 후 갱신 확인.
+2. 다른 페이지에서 도구 사용(예: /goals "회고 생성") → 홈 복귀 시 RecentActivity에 노출.
+3. 비용 한도 80% 넘은 agent → progress bar 빨강.
+4. 일시정지된 agent (있다면) → 격자에 흐림 + Pause 아이콘.
+
 ### 다솜 + 도연 활성화 — ✅ 완료 (2026-05-07)
 
 | 항목 | 결과 |
@@ -629,7 +651,7 @@ supabase        ^2.98.1
 - [~] 10명의 Agent 모두 응답 가능 — **활성 9/10** (민지·혜원·하영·서연·현주·민영·수민·다솜·도연). 비활성 1: 정연(Gmail 보류).
 - [x] 민지 채팅으로 다른 Agent 호출 가능 *(Phase 2A ask_agent)*
 - [x] Agent 관리 페이지에서 10명 모두 제어 가능 *(Phase 6 — /agents)*
-- [ ] 홈 대시보드 AI 팀 위젯에서 각 Agent 상태 확인 + 클릭 진입 *(Phase 6 보조)*
+- [x] 홈 대시보드 AI 팀 위젯에서 각 Agent 상태 확인 + 클릭 진입 *(Phase 6 보조 — 2026-05-07)*
 - [x] 프롬프트 버전 롤백 작동 *(Phase 6 — /agents/[name] 프롬프트 탭)*
 - [x] 비용 한도 초과 시 자동 일시정지 *(Phase 1 — guard.ts)*
 - [x] 옵시디언 vault 동기화 + 검색 작동 *(Phase 3 — 로컬 Mac vault, OpenAI 임베딩)*
