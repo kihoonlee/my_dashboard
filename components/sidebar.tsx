@@ -1,9 +1,9 @@
 "use client";
 
-// Phase 0 Day 5 — 사이드바 11개 메뉴 골격.
-// 각 페이지의 실제 라우트는 Phase 1+ 에서 채워진다.
-// 비어있는 라우트는 일단 "/" 또는 placeholder. 클릭 가능하지만 페이지 자체는 미구현.
+// 사이드바 — 데스크톱은 고정 컬럼, 모바일은 햄버거 → 좌측 드로어.
+// 모바일 드로어 열기/닫기 상태는 useSidebar() 훅으로 노출.
 
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -17,6 +17,7 @@ import {
   Inbox,
   Bot,
   Settings,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -24,7 +25,7 @@ type MenuItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  phase: string; // 어느 Phase에서 구현될지 (참고용 툴팁)
+  phase: string;
 };
 
 const MENU_ITEMS: MenuItem[] = [
@@ -40,58 +41,129 @@ const MENU_ITEMS: MenuItem[] = [
   { href: "/settings", label: "설정", icon: Settings, phase: "Phase 7" },
 ];
 
+// ─────────────────────────────────────────────────────────
+// Mobile drawer 상태 컨텍스트
+// ─────────────────────────────────────────────────────────
+type SidebarCtx = { open: boolean; setOpen: (v: boolean) => void };
+const SidebarContext = createContext<SidebarCtx | null>(null);
+
+export function SidebarProvider({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <SidebarContext.Provider value={{ open, setOpen }}>
+      {children}
+    </SidebarContext.Provider>
+  );
+}
+
+export function useSidebar() {
+  const ctx = useContext(SidebarContext);
+  if (!ctx) throw new Error("useSidebar must be inside SidebarProvider");
+  return ctx;
+}
+
+// ─────────────────────────────────────────────────────────
+// 사이드바 본체
+// ─────────────────────────────────────────────────────────
 export function Sidebar() {
   const pathname = usePathname();
+  const { open, setOpen } = useSidebar();
+
+  // 라우트 변경 시 모바일 드로어 자동 닫기
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname, setOpen]);
+
+  // ESC로 닫기
+  const handleEsc = useCallback(
+    (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    },
+    [setOpen],
+  );
+  useEffect(() => {
+    if (!open) return;
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [open, handleEsc]);
 
   return (
-    <aside className="hidden md:flex md:w-60 lg:w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground">
-      <div className="px-5 py-5 border-b border-sidebar-border">
-        <Link href="/" className="flex items-baseline gap-2">
-          <span className="text-lg font-bold tracking-tight text-foreground">
-            MyHub
-          </span>
-          <span className="text-xs text-muted-foreground">Phase 0</span>
-        </Link>
-      </div>
+    <>
+      {/* 모바일 백드롭 */}
+      {open && (
+        <div
+          className="md:hidden fixed inset-0 z-40 bg-foreground/40 backdrop-blur-sm"
+          onClick={() => setOpen(false)}
+          aria-hidden
+        />
+      )}
 
-      <nav className="flex-1 overflow-y-auto py-3 px-2">
-        <ul className="flex flex-col gap-0.5">
-          {MENU_ITEMS.map(({ href, label, icon: Icon, phase }) => {
-            const active =
-              href === "/"
-                ? pathname === "/"
-                : pathname === href || pathname.startsWith(href + "/");
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  title={`${label} (${phase})`}
-                  className={cn(
-                    "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                    active
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                      : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" />
-                  <span className="truncate">{label}</span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-
-      <div className="px-3 py-3 border-t border-sidebar-border">
-        <form action="/auth/signout" method="post">
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-50 w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200",
+          // 모바일: 슬라이드 in/out
+          open ? "translate-x-0 flex" : "-translate-x-full hidden",
+          // 데스크톱: 항상 표시, 정적 위치
+          "md:static md:flex md:translate-x-0 md:w-60 lg:w-64",
+        )}
+      >
+        <div className="px-5 py-5 border-b border-sidebar-border flex items-center justify-between">
+          <Link href="/" className="flex items-baseline gap-2">
+            <span className="text-lg font-bold tracking-tight text-foreground">
+              MyHub
+            </span>
+            <span className="text-xs text-muted-foreground">9/10</span>
+          </Link>
+          {/* 모바일 닫기 버튼 */}
           <button
-            type="submit"
-            className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-lg hover:bg-sidebar-accent/60"
+            type="button"
+            onClick={() => setOpen(false)}
+            className="md:hidden p-1 rounded-md hover:bg-sidebar-accent text-muted-foreground"
+            aria-label="사이드바 닫기"
           >
-            로그아웃
+            <X className="h-4 w-4" />
           </button>
-        </form>
-      </div>
-    </aside>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto py-3 px-2">
+          <ul className="flex flex-col gap-0.5">
+            {MENU_ITEMS.map(({ href, label, icon: Icon, phase }) => {
+              const active =
+                href === "/"
+                  ? pathname === "/"
+                  : pathname === href || pathname.startsWith(href + "/");
+              return (
+                <li key={href}>
+                  <Link
+                    href={href}
+                    title={`${label} (${phase})`}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                      active
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
+                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                    )}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="truncate">{label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+
+        <div className="px-3 py-3 border-t border-sidebar-border">
+          <form action="/auth/signout" method="post">
+            <button
+              type="submit"
+              className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-lg hover:bg-sidebar-accent/60"
+            >
+              로그아웃
+            </button>
+          </form>
+        </div>
+      </aside>
+    </>
   );
 }

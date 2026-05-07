@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider, NO_FLASH_SCRIPT } from "@/components/theme-provider";
 
@@ -6,6 +6,18 @@ export const metadata: Metadata = {
   title: "MyHub — Personal Dashboard",
   description:
     "10명의 AI Agent 팀이 사업 운영과 개인 정보를 능동적으로 보좌하는 1인용 정보 허브",
+  applicationName: "MyHub",
+  formatDetection: { telephone: false },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 5,
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
 };
 
 export default function RootLayout({

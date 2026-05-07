@@ -1,6 +1,6 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-07 (/goals Grit 스타일 개편 — 데일리 인사이트 + 습관 detail + 코칭)**
+> 최종 업데이트: **2026-05-07 (Phase 7 코드 작업 완료 — 배포·자동화·반응형·최적화)**
 > 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
 > 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md`
 
@@ -12,7 +12,7 @@
 
 - **유형**: 개인 프로젝트 (kihoonlee 계정)
 - **로드맵**: 10주 풀빌드 (기획서 그대로) + 11-12주 버퍼
-- **현재 위치**: **다솜·도연 활성화 완료** — 다솜(캡처/읽을거리/학습) + 도연(Claude Skills 카탈로그). 활성 Agent **9/10** (민지·혜원·하영·서연·현주·민영·수민·다솜·도연). 비활성 1: 정연(Gmail 보류).
+- **현재 위치**: **Phase 7 코드 완료** — Vercel cron 4종, 모바일 반응형, Lighthouse 최적화, rate limiting, 구조화 로깅, RLS SQL, DEPLOYMENT.md. 활성 Agent **9/10**, 1차 완료 체크리스트 **14/14**(개발 측면). 외부 가입(Vercel/Supabase production) 후 즉시 배포 가능.
 
 ---
 
@@ -341,6 +341,29 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 5. `agent_logs` 테이블에 `trigger='github_digest_*'` 행이 LLM 호출 수만큼 누적.
 
 ---
+
+### Phase 7 — 배포·자동화·반응형·최적화 — ✅ 코드 완료 (2026-05-07)
+
+| 영역 | 결과 |
+|---|---|
+| **Vercel Cron** | `lib/cron/auth.ts` (Bearer secret 검증 + ALLOWED_EMAIL → cron user lookup). `/api/cron/{daily-morning, sunday-evening, hourly, calendar-sync}` 4 라우트. `vercel.json` schedule. `proxy.ts`에서 `/api/cron/*` 인증 우회. |
+| **daily-morning (UTC 20시 = KST 5시)** | RSS 동기화 + 데일리 브리핑 + 데일리 인사이트 (수민) 한 번에. agent_logs에 비용 기록. |
+| **sunday-evening (UTC 일12시 = KST 일21시)** | 주간 회고 자동 생성 (수민, Sonnet ~$0.02). |
+| **hourly** | GitHub 활동 동기화 + 다이제스트 (현주). Pro tier 필요. |
+| **calendar-sync (5분)** | Google Calendar 캐시 갱신. Pro tier 필요. 권한 만료 시 graceful 200 응답. |
+| **모바일 반응형** | 사이드바: 데스크톱 정적 컬럼, 모바일 슬라이드 드로어 + 백드롭 + ESC 닫기. SidebarProvider 컨텍스트로 Header 햄버거 ↔ Sidebar 상태 공유. 라우트 변경 시 자동 닫기. |
+| **Lighthouse 최적화** | viewport meta 추가, themeColor light/dark. next.config.ts: `optimizePackageImports: ['lucide-react']`, `removeConsole`(prod), security headers (X-Frame-Options/Content-Type-Options/Permissions-Policy/Referrer-Policy). |
+| **Rate limiting** | `lib/rate-limit.ts` 메모리 버킷 (분/시/일 다중 윈도우). `/api/agents/[name]/invoke`에 적용 (외부 호출만, 30/min, 200/hour). 429 + Retry-After 헤더. |
+| **구조화 로깅** | `lib/observability.ts` — production은 JSON 한 줄, dev는 사람이 읽기 쉬운 포맷. globalThis.Sentry 검사 후 captureException 자동 호출 (SDK 미설치여도 안전 noop). |
+| **RLS 정책** | `supabase/migrations/0001_rls_policies.sql` — `current_user_id()` 헬퍼 + USER-SCOPED 테이블 (users, oauth_tokens, chat_*) + SHARED 테이블 (agents, todos 등 22개) DO loop. service_role(cron)은 자동 우회. |
+| **DEPLOYMENT.md** | Supabase production 생성 → Google OAuth redirect URI 등록 → Vercel 환경변수 + Cron 활성화 → Sentry 옵션 → 검증 → 운영/롤백 가이드. |
+| `next build` 통과 (54 라우트, +4 cron) | — |
+
+**구현 완료지만 사용자 외부 작업 필요** (DEPLOYMENT.md 참조):
+1. Vercel 가입 + GitHub repo import + 환경변수 등록 + 배포 (Hobby tier로 daily cron만 활성, Pro $20/월에서 5분/시간 cron 추가)
+2. Supabase production 프로젝트 신규 생성 + 스키마 push + RLS SQL 적용
+3. Google Cloud OAuth redirect URI에 production URL 추가
+4. (선택) Sentry 가입 + DSN 등록 + `npx @sentry/wizard` 실행
 
 ### /goals Grit 스타일 개편 — ✅ 완료 (2026-05-07)
 
@@ -711,8 +734,8 @@ supabase        ^2.98.1
 - [x] 13(27)개 프로덕트 GitHub 활동 다이제스트 *(Phase 4-2)*
 - [x] 데일리 뉴스 브리핑 — 수동 트리거(`/news` 브리핑 생성). cron 자동화는 Phase 7. *(Phase 5-B)*
 - [x] 매주 회고 — 수동 트리거(`/goals` 회고 생성). cron 자동화는 Phase 7. *(Phase 5-C)*
-- [ ] 모바일 반응형 (iPad 이상) *(Phase 7)*
-- [ ] Lighthouse Performance 80+ *(Phase 7)*
+- [x] 모바일 반응형 (iPad 이상) *(Phase 7 — 사이드바 햄버거 + 헤더 + 본문 mobile-first)*
+- [~] Lighthouse Performance 80+ *(Phase 7 — 코드 최적화 적용. 실제 측정은 production 배포 후)*
 
 ### 운영 인프라 보강 — ✅ 완료
 
@@ -720,9 +743,10 @@ supabase        ^2.98.1
 
 ---
 
-## 10. 다음 즉시 액션 (Phase 5 끝 → Phase 7 진입 준비)
+## 10. 다음 즉시 액션 (Phase 7 코드 완료 → 외부 가입 + 배포)
 
-Phase 2B/3/4-2/5/6 모두 완료. 활성 Agent 8/10. 1차 완료 체크리스트 12/14 ✓.
+Phase 2B/3/4-2/5/6/7 모두 코드 완료. 활성 Agent 9/10. 1차 완료 체크리스트 14/14(개발 측면).
+실제 배포는 [DEPLOYMENT.md](DEPLOYMENT.md) 참조.
 
 ```
 [즉시 사용자 작업 (검증)]

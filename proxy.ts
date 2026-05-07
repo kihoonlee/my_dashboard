@@ -63,8 +63,11 @@ export async function proxy(request: NextRequest) {
     request.headers.get("x-myhub-internal-call") === "1" &&
     request.headers.has("x-myhub-agent-depth");
 
-  // 인증 안 됨 → 로그인 페이지로 (public path 또는 내부 agent 호출 제외)
-  if (!user && !isPublic && !isInternalAgentCall) {
+  // Vercel Cron 호출도 인증 우회 (cron 자체 시크릿으로 라우트 내부에서 검증).
+  const isCronCall = pathname.startsWith("/api/cron/");
+
+  // 인증 안 됨 → 로그인 페이지로 (public path 또는 내부 agent 호출 또는 cron 제외)
+  if (!user && !isPublic && !isInternalAgentCall && !isCronCall) {
     // OAuth provider 응답이 site_url(=`/`) 으로 떨어진 케이스 — Supabase가 redirectTo
     // 매칭에 실패해 `/?code=...&state=...`로 떨어뜨릴 수 있음.
     // 그대로 `/auth/login`으로 redirect하면 ?code가 같이 옮겨가 버려 PKCE verifier가

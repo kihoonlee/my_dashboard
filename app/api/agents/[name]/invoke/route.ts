@@ -36,6 +36,7 @@ import { SOOMIN_TOOLS, runSoominTool } from "@/lib/agents/tools/soomin";
 import { DASOM_TOOLS, runDasomTool } from "@/lib/agents/tools/dasom";
 import { DOYEON_TOOLS, runDoyeonTool } from "@/lib/agents/tools/doyeon";
 import { makeAskAgentTool, runAskAgent } from "@/lib/agents/tools/shared";
+import { rateLimit, rateLimitGc } from "@/lib/rate-limit";
 
 const MAX_ITERATIONS = 5;
 const MAX_AGENT_DEPTH = 2;
@@ -496,6 +497,32 @@ export async function POST(
       { error: "max_agent_depth_exceeded", depth },
       { status: 400 },
     );
+  }
+
+  // Rate limit — agent별 (외부 호출만, 내부 ask_agent는 우회).
+  // 1인용 가정이지만 실수성 무한 호출 방어.
+  const isInternal = request.headers.get("x-myhub-internal-call") === "1";
+  if (!isInternal) {
+    rateLimitGc();
+    const limit = rateLimit("agent-invoke", name, {
+      perMin: 30,
+      perHour: 200,
+    });
+    if (!limit.ok) {
+      return NextResponse.json(
+        {
+          error: "rate_limited",
+          window: limit.window,
+          retryAfterMs: limit.retryAfterMs,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)),
+          },
+        },
+      );
+    }
   }
 
   let body: { message?: string; trigger?: string };
