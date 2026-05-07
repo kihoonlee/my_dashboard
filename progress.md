@@ -250,6 +250,31 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 ### Phase 2B 잔여 (다음 후보)
 - (현시점 모두 완료 — Phase 3 옵시디언 진입 가능)
 
+---
+
+### Phase 3 옵시디언 1차 — ✅ 완료 (수동 sync + 의미 검색 + 서연 도구)
+
+| 항목 | 결과 |
+|---|---|
+| **임베딩 모델 결정**: OpenAI `text-embedding-3-small` + `dimensions=1024` (스키마 vector(1024) 호환). 비용 $0.02/M tokens. | `lib/openai/embeddings.ts` |
+| **vault 위치**: 로컬 Mac Google Drive 경로 (`OBSIDIAN_VAULT_PATH` env). GitHub webhook + HMAC 흐름은 보류. | `.env.example`, `.env.local` |
+| `lib/openai/embeddings.ts` — `embedOne` / `embedMany` (batch). 부모 셸 빈 `OPENAI_API_KEY=` fallback (anthropic/client.ts와 동일 패턴). | embeddings.ts |
+| `lib/obsidian/parser.ts` — gray-matter frontmatter + 인라인 `#태그` + wikilinks 추출 + word count. title fallback (frontmatter > 첫 H1 > 파일명). | parser.ts |
+| `lib/obsidian/scanner.ts` — vault root 재귀 walk, `.obsidian` / `.trash` / dotfile 무시, mtime + size 반환. | scanner.ts |
+| `lib/obsidian/sync.ts` — vault scan ↔ DB 비교(mtime 1초 buffer), 변경/신규만 read+parse+embed+upsert, vault에서 사라진 노트 DB 삭제. | sync.ts |
+| `POST /api/sync/obsidian` — 수동 동기화 트리거 + `users.settings_json.lastObsidianSync` 기록. | route.ts |
+| `GET /api/knowledge/search?q=&limit=` — 쿼리 임베딩 → pgvector cosine 정렬 → 상위 N개 (filePath/title/preview/tags/score). | route.ts |
+| `GET /api/knowledge/note?path=` — 단일 노트 본문 조회. | route.ts |
+| `/knowledge` 페이지 — 검색 박스(600ms 디바운스 자동 검색) + 결과 리스트(score + tags + preview) + 노트 본문 패널. vault 동기화 버튼 + 결과 요약. | page.tsx |
+| **서연 도메인 도구 2개**: `search_notes(query, limit)` / `get_note(filePath)`. invoke route의 `getAgentTools`에 등록. 민지/혜원의 `call_agents` 화이트리스트에 이미 `seoyeon` 포함되어 있어 위임 가능. | seoyeon.ts |
+| `next build` 통과 (17 라우트). | — |
+
+**사용자 검증 필요**:
+1. `.env.local`에 `OPENAI_API_KEY` 추가 (없으면 sync/검색 401).
+2. `/knowledge`에서 "vault 동기화" → 2개 노트(index.md, log.md) upsert 확인.
+3. 검색어 입력 → 의미 검색 결과 score 0~1 사이 정상 출력.
+4. 민지에게 "위키에서 멘탈모델 페이지 찾아줘" → 서연 위임 → search_notes 호출 → 답변.
+
 ### Phase 3 (Week 4-5) — 지식 영역 (서연 + 다솜) + 옵시디언
 
 - 옵시디언 vault GitHub webhook + HMAC 검증 + 임베딩
