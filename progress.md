@@ -280,6 +280,27 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 - `lib/openai/embeddings.ts`에 `process.env.X?.trim()` 방어적 적용.
 - CLAUDE.md 트러블슈팅에 ".env 등호 뒤 공백" 항목 추가.
 
+---
+
+### Phase 4 GitHub Activity 1차 — ✅ 완료 (FlowTo-ai 27개 repo + 칸반 + 현주 도구)
+
+| 항목 | 결과 |
+|---|---|
+| **인증**: `GITHUB_PAT` env 우선 → 없으면 `gh auth token` CLI fallback (단일 사용자 dev 한정). 현재 `mioichinose0817` 계정으로 인증되어 FlowTo-ai 조직 read 권한 보유. | `lib/github/client.ts` |
+| `lib/github/client.ts` — 직접 fetch 기반 (Octokit 의존성 회피). `listOrgRepos` / `listRepoCommits` / `listRepoPulls` / `listRepoIssues`. | client.ts |
+| `lib/github/sync.ts` — repo 메타 → `products` upsert (status는 archived만 자동, 나머지 사용자 분류 보존), 30일 윈도우 commits/PRs/issues → `github_activity` upsert (type+github_id unique 키). | sync.ts |
+| `POST /api/sync/github?org=` — 수동 트리거. `users.settings_json.lastGithubSync` 기록. | route.ts |
+| `GET /api/business/products` — products + 30일 활동 카운트(commit/PR/issue) 한 쿼리(LATERAL aggregate). | route.ts |
+| `PATCH /api/business/products/[id]` — status/notes/iconEmoji/colorHex 갱신. status 화이트리스트 검사. | route.ts |
+| `/business` 페이지 — 4컬럼 칸반(idea / active / paused / archived) + 카드(언어 배지 + 최근 push + 30일 활동 + GitHub 링크 + status 드롭다운 변경). | page.tsx |
+| **현주 도메인 도구 2개**: `list_products(status?)` / `get_product(slug, activityLimit?)`. invoke route `getAgentTools`에 등록. 민지/혜원의 `call_agents`에 이미 `hyunju` 포함되어 있어 위임 가능. | hyunju.ts |
+| `next build` 통과 (19 라우트). | — |
+
+**검증 시나리오**:
+1. `/business` 진입 → "GitHub 동기화" 한 번. 27개 repo가 칸반에 노출되고 archived 자동 분류.
+2. 카드의 status 드롭다운으로 active/paused/idea로 분류 — 다음 sync에서도 보존.
+3. 민지에게 "최근 활발한 프로덕트 뭐야?" → 현주 위임 → `list_products` 호출.
+
 ### Phase 3 (Week 4-5) — 지식 영역 (서연 + 다솜) + 옵시디언
 
 - 옵시디언 vault GitHub webhook + HMAC 검증 + 임베딩

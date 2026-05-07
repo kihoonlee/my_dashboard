@@ -30,6 +30,7 @@ import { calculateCostUsd } from "@/lib/anthropic/pricing";
 import { checkAfterInvoke, checkBeforeInvoke } from "@/lib/agents/guard";
 import { HAYOUNG_TOOLS, runHayoungTool } from "@/lib/agents/tools/hayoung";
 import { SEOYEON_TOOLS, runSeoyeonTool } from "@/lib/agents/tools/seoyeon";
+import { HYUNJU_TOOLS, runHyunjuTool } from "@/lib/agents/tools/hyunju";
 import { makeAskAgentTool, runAskAgent } from "@/lib/agents/tools/shared";
 
 const MAX_ITERATIONS = 5;
@@ -76,6 +77,9 @@ function getAgentTools(
   } else if (englishName === "seoyeon") {
     domainTools = SEOYEON_TOOLS;
     runDomainTool = runSeoyeonTool;
+  } else if (englishName === "hyunju") {
+    domainTools = HYUNJU_TOOLS;
+    runDomainTool = runHyunjuTool;
   }
 
   const callAgents = permissions.call_agents ?? [];
