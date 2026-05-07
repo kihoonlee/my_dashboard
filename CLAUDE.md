@@ -164,6 +164,12 @@ URL `?session=<uuid>`로 세션 재진입(히스토리 GET). 클라이언트는 
 - `db.execute(sql\`... ${someDate} ...\`)` 패턴에서 `Date` 객체를 그대로 넘기면 postgres-js가 `ERR_INVALID_ARG_TYPE`로 거부. `someDate.toISOString()`으로 변환 + `${iso}::timestamptz` 명시 캐스트.
 - drizzle ORM의 `db.insert(...).values({ ts: new Date() })` 같은 객체 빌더 경로는 자동 변환되므로 영향 없음. raw `sql` 템플릿에서만 발생.
 
+**`.env.local`의 등호 뒤 공백은 값에 그대로 포함됨**
+- `KEY= value` 처럼 `=` 다음에 공백을 넣으면 `process.env.KEY` 값이 `" value"`(앞 공백 포함)로 들어감. dotenv 표준은 trim 안 함.
+- API 키 같은 경우 인증 헤더에 `Bearer  sk-...`처럼 박혀 401. 사용자가 "키 박았는데 안 됨" 호소하는 케이스의 흔한 원인.
+- 코드 단 방어: lib/openai/embeddings.ts처럼 `process.env.X?.trim()` 패턴.
+- 진단: `grep -E "^KEY=" .env.local | od -c`로 raw bytes 확인.
+
 ### Anthropic SDK
 
 **부모 셸이 빈 `ANTHROPIC_API_KEY=` export → Next dotenv override:false에 막힘**

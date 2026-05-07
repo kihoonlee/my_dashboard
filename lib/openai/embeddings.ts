@@ -30,10 +30,10 @@ function readApiKeyFromEnvFile(): string | undefined {
 
 export function getOpenAIClient(): OpenAI {
   if (client) return client;
-  let apiKey = process.env.OPENAI_API_KEY;
-  // 부모 셸이 빈 값으로 export하는 케이스 fallback (anthropic/client.ts와 동일 패턴)
+  // .env.local에 'KEY= value'처럼 등호 뒤 공백이 있어도 dotenv는 그대로 보존하므로 trim.
+  let apiKey = process.env.OPENAI_API_KEY?.trim();
   if (!apiKey || apiKey.length === 0) {
-    apiKey = readApiKeyFromEnvFile();
+    apiKey = readApiKeyFromEnvFile()?.trim();
   }
   if (!apiKey) {
     throw new Error("OPENAI_API_KEY is not set in environment (.env.local).");

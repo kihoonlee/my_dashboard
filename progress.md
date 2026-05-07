@@ -269,11 +269,16 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 | **서연 도메인 도구 2개**: `search_notes(query, limit)` / `get_note(filePath)`. invoke route의 `getAgentTools`에 등록. 민지/혜원의 `call_agents` 화이트리스트에 이미 `seoyeon` 포함되어 있어 위임 가능. | seoyeon.ts |
 | `next build` 통과 (17 라우트). | — |
 
-**사용자 검증 필요**:
-1. `.env.local`에 `OPENAI_API_KEY` 추가 (없으면 sync/검색 401).
-2. `/knowledge`에서 "vault 동기화" → 2개 노트(index.md, log.md) upsert 확인.
-3. 검색어 입력 → 의미 검색 결과 score 0~1 사이 정상 출력.
-4. 민지에게 "위키에서 멘탈모델 페이지 찾아줘" → 서연 위임 → search_notes 호출 → 답변.
+**사용자 검증 — ✅ 완료 (2026-05-07)**:
+- `.env.local`에 `OPENAI_API_KEY` 추가 (등호 뒤 공백 trim 이슈 fix 후 정상).
+- `/knowledge`에서 vault 동기화 → 2개 노트 upsert 확인.
+- 검색 정상 출력 확인.
+- 동기화 에러 발생 시 errors[] 본문이 UI에 노출되도록 개선.
+
+진단 강화:
+- `lib/obsidian/sync.ts`에 vault path + scanned 수 console.log (운영 모니터링용).
+- `lib/openai/embeddings.ts`에 `process.env.X?.trim()` 방어적 적용.
+- CLAUDE.md 트러블슈팅에 ".env 등호 뒤 공백" 항목 추가.
 
 ### Phase 3 (Week 4-5) — 지식 영역 (서연 + 다솜) + 옵시디언
 

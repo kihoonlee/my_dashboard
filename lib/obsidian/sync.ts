@@ -27,6 +27,9 @@ export async function syncObsidianVault(): Promise<SyncSummary> {
   const errors: string[] = [];
 
   const scanned = await scanVault();
+  console.log(
+    `[obsidian/sync] vault=${process.env.OBSIDIAN_VAULT_PATH ?? "<unset>"} scanned=${scanned.length}`,
+  );
 
   // DB 현재 상태 (path → lastModified)
   const existingRows = await db

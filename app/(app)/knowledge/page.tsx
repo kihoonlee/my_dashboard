@@ -38,6 +38,7 @@ export default function KnowledgePage() {
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncSummary, setSyncSummary] = useState<string | null>(null);
+  const [syncErrors, setSyncErrors] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   async function search() {
@@ -89,6 +90,7 @@ export default function KnowledgePage() {
     if (syncing) return;
     setSyncing(true);
     setSyncSummary(null);
+    setSyncErrors([]);
     setError(null);
     try {
       const res = await fetch("/api/sync/obsidian", { method: "POST" });
@@ -100,6 +102,7 @@ export default function KnowledgePage() {
         `동기화 완료 — 스캔 ${data.scanned}건 · 신규/갱신 ${data.upserted}건 · 변경없음 ${data.unchanged}건 · 삭제 ${data.deleted}건` +
           (data.errors?.length ? ` · 에러 ${data.errors.length}건` : ""),
       );
+      setSyncErrors(Array.isArray(data.errors) ? data.errors : []);
       // sync 후 결과가 있으면 자동 검색 재실행
       if (query.trim()) await search();
     } catch (e) {
@@ -152,6 +155,23 @@ export default function KnowledgePage() {
       {syncSummary && (
         <div className="text-xs text-primary bg-primary/10 border border-primary/20 rounded-lg px-3 py-2">
           {syncSummary}
+        </div>
+      )}
+      {syncErrors.length > 0 && (
+        <div className="border border-amber-400/50 bg-amber-400/10 text-amber-700 dark:text-amber-300 rounded-lg p-3 text-xs flex flex-col gap-1">
+          <div className="font-medium">동기화 중 발생한 에러</div>
+          <ul className="list-disc list-inside font-mono space-y-0.5">
+            {syncErrors.slice(0, 10).map((e, i) => (
+              <li key={i} className="break-all">
+                {e}
+              </li>
+            ))}
+            {syncErrors.length > 10 && (
+              <li className="opacity-60">
+                ...외 {syncErrors.length - 10}건
+              </li>
+            )}
+          </ul>
         </div>
       )}
       {error && (
