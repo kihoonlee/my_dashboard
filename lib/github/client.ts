@@ -1,9 +1,10 @@
 // GitHub REST API 클라이언트.
-// 인증: GITHUB_PAT 환경변수 우선, 없으면 `gh auth token` CLI fallback (단일 사용자 dev 한정).
+// 인증 우선순위: api_keys 테이블 → GITHUB_PAT 환경변수 → `gh auth token` CLI fallback.
+// 모두 lib/secrets/resolver.ts에서 일괄 처리.
 // 호출 패턴: 직접 fetch (Octokit 의존성 회피). pagination은 필요 시점에 별도 헬퍼.
 
 import "server-only";
-import { execSync } from "child_process";
+import { resolveApiKey } from "@/lib/secrets/resolver";
 
 const GITHUB_API = "https://api.github.com";
 const COMMON_HEADERS = {
@@ -11,36 +12,23 @@ const COMMON_HEADERS = {
   "X-GitHub-Api-Version": "2022-11-28",
 };
 
-let cachedToken: string | undefined;
-
-export function getGithubToken(): string {
-  if (cachedToken) return cachedToken;
-  let token = process.env.GITHUB_PAT?.trim();
-  if (!token) {
-    try {
-      token = execSync("gh auth token", {
-        encoding: "utf-8",
-        stdio: ["ignore", "pipe", "ignore"],
-      }).trim();
-    } catch {
-      // gh CLI 미설치 또는 미인증
-    }
-  }
+export async function getGithubToken(): Promise<string> {
+  const token = await resolveApiKey("github");
   if (!token) {
     throw new Error(
-      "GitHub token not available. Set GITHUB_PAT in .env.local or run `gh auth login`.",
+      "GitHub token not available. Set it in /settings, GITHUB_PAT in .env.local, or run `gh auth login`.",
     );
   }
-  cachedToken = token;
   return token;
 }
 
 export async function githubFetch<T>(path: string): Promise<T> {
   const url = path.startsWith("http") ? path : `${GITHUB_API}${path}`;
+  const token = await getGithubToken();
   const res = await fetch(url, {
     headers: {
       ...COMMON_HEADERS,
-      Authorization: `Bearer ${getGithubToken()}`,
+      Authorization: `Bearer ${token}`,
     },
     cache: "no-store",
   });

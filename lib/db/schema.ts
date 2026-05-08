@@ -52,6 +52,30 @@ export const oauthTokens = pgTable(
   ],
 );
 
+// 사용자가 설정 UI에서 입력한 API 키. provider별 1개. encryptedValue는 oauth_tokens와
+// 같은 방식 — pgp_sym_encrypt(value, OAUTH_TOKEN_KEY) → base64. maskedTail은 마지막 4자
+// (UI 표시용 평문 안전). verifiedAt은 마지막 검증 성공 시각 (저장은 검증 통과 후만).
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    encryptedValue: text("encrypted_value").notNull(),
+    maskedTail: text("masked_tail").notNull().default(""),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [unique("api_keys_user_provider_unique").on(t.userId, t.provider)],
+);
+
 // ============================================================
 // AGENTS & CHAT
 // ============================================================

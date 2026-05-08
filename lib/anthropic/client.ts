@@ -5,43 +5,22 @@
 // - 4.6 이상은 streaming 권장 (max_tokens > ~16K), Phase 1 단계에서는 비-스트리밍 1024-tokens.
 
 import Anthropic from "@anthropic-ai/sdk";
-import { readFileSync } from "fs";
-import { resolve } from "path";
-
-let client: Anthropic | null = null;
-let cachedKeyFromFile: string | undefined;
+import { resolveApiKey } from "@/lib/secrets/resolver";
 
 /**
- * 부모 셸이 ANTHROPIC_API_KEY="" (빈 값)으로 export하면 Next.js의 dotenv는 default
- * override:false 정책으로 .env.local 값을 적용하지 않는다 (Claude Code harness가
- * 자식 프로세스에 빈 값 주입하는 케이스 등). 이 fallback은 process.env가 비어있을 때
- * .env.local을 직접 파싱한다.
+ * Anthropic 클라이언트 인스턴스를 매 호출마다 생성. 캐시 안 함 — 사용자가 /settings에서
+ * 키를 회전했을 때 즉시 반영하기 위함. SDK 객체 생성은 lightweight.
+ *
+ * 키 해소 우선순위: api_keys 테이블 (DB) → process.env / .env.local → 없으면 throw.
  */
-function readApiKeyFromEnvFile(): string | undefined {
-  if (cachedKeyFromFile !== undefined) return cachedKeyFromFile;
-  try {
-    const content = readFileSync(resolve(process.cwd(), ".env.local"), "utf-8");
-    const m = content.match(/^ANTHROPIC_API_KEY=(.+)$/m);
-    cachedKeyFromFile = m?.[1].trim();
-  } catch {
-    cachedKeyFromFile = undefined;
-  }
-  return cachedKeyFromFile;
-}
-
-export function getAnthropicClient(): Anthropic {
-  if (client) return client;
-  let apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || apiKey.length === 0) {
-    apiKey = readApiKeyFromEnvFile();
-  }
+export async function getAnthropicClient(): Promise<Anthropic> {
+  const apiKey = await resolveApiKey("anthropic");
   if (!apiKey) {
     throw new Error(
-      "ANTHROPIC_API_KEY is not set in environment (.env.local).",
+      "ANTHROPIC_API_KEY not available. Set it in /settings or .env.local.",
     );
   }
-  client = new Anthropic({ apiKey });
-  return client;
+  return new Anthropic({ apiKey });
 }
 
 /**
@@ -72,7 +51,7 @@ export async function invokeAgent(params: {
   /** 시스템 프롬프트 + tool defs를 캐시 (5min TTL). 동일 agent 반복 호출 시 토큰 절약. */
   cacheSystemAndTools?: boolean;
 }): Promise<Anthropic.Message> {
-  const anthropic = getAnthropicClient();
+  const anthropic = await getAnthropicClient();
 
   // 시스템 프롬프트 — caching 활성화 시 마지막 system block에 cache_control.
   // 시드의 systemPrompt는 단일 문자열이므로 단일 block으로 변환.
@@ -147,7 +126,7 @@ function buildTools(
  * SDK의 stream()이 cache_creation_input_tokens / cache_read_input_tokens 등 usage 메타도
  * 최종 message에 포함해 돌려준다. 일반 invoke와 동일한 비용 계산 가능.
  */
-export function streamAgent(params: {
+export async function streamAgent(params: {
   model: string;
   systemPrompt: string;
   maxTokens: number;
@@ -155,8 +134,8 @@ export function streamAgent(params: {
   messages: Anthropic.MessageParam[];
   tools?: AgentTool[];
   cacheSystemAndTools?: boolean;
-}): import("@anthropic-ai/sdk/lib/MessageStream").MessageStream {
-  const anthropic = getAnthropicClient();
+}): Promise<import("@anthropic-ai/sdk/lib/MessageStream").MessageStream> {
+  const anthropic = await getAnthropicClient();
   const cache = !!params.cacheSystemAndTools;
   const system = buildSystem(params.systemPrompt, cache);
   const tools = buildTools(params.tools, cache);

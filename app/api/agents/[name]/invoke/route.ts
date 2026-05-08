@@ -338,7 +338,7 @@ function runSseMode(opts: {
           iterations += 1;
           emit("iteration", { n: iterations });
 
-          const ms = streamAgent({
+          const ms = await streamAgent({
             model: agent.model,
             systemPrompt,
             maxTokens: agent.maxTokens,

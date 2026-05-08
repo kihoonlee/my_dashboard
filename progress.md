@@ -1,6 +1,6 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-07 (Phase 7 코드 작업 완료 — 배포·자동화·반응형·최적화)**
+> 최종 업데이트: **2026-05-08 (설정 페이지 + API 키 관리 — UI 입력·검증·암호화 저장)**
 > 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
 > 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md`
 
@@ -12,7 +12,7 @@
 
 - **유형**: 개인 프로젝트 (kihoonlee 계정)
 - **로드맵**: 10주 풀빌드 (기획서 그대로) + 11-12주 버퍼
-- **현재 위치**: **Phase 7 코드 완료** — Vercel cron 4종, 모바일 반응형, Lighthouse 최적화, rate limiting, 구조화 로깅, RLS SQL, DEPLOYMENT.md. 활성 Agent **9/10**, 1차 완료 체크리스트 **14/14**(개발 측면). 외부 가입(Vercel/Supabase production) 후 즉시 배포 가능.
+- **현재 위치**: **Phase 7 코드 완료 + 설정 페이지** — Vercel cron 4종, 모바일 반응형, Lighthouse 최적화, rate limiting, 구조화 로깅, RLS SQL, DEPLOYMENT.md. **`/settings` 페이지 추가** (프로필·동기화 트리거·API 키 입력/검증/암호화 저장·테마). 활성 Agent **9/10**, 1차 완료 체크리스트 **14/14**(개발 측면). 외부 가입(Vercel/Supabase production) 후 즉시 배포 가능.
 
 ---
 
@@ -364,6 +364,31 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 2. Supabase production 프로젝트 신규 생성 + 스키마 push + RLS SQL 적용
 3. Google Cloud OAuth redirect URI에 production URL 추가
 4. (선택) Sentry 가입 + DSN 등록 + `npx @sentry/wizard` 실행
+
+### 설정 페이지 + API 키 입력·검증·암호화 저장 — ✅ 완료 (2026-05-08)
+
+사이드바의 `/settings` 링크가 404였던 것을 시작으로, **사용자가 보안 키를 UI에서 직접 입력 → 실제 API에 검증 호출 → 통과 시 pgcrypto 암호화 저장** 까지 구현. `.env.local` 의존성 없이 운영 가능.
+
+| 영역 | 결과 |
+|---|---|
+| **신규 `/settings` 페이지** | 5개 섹션 — 프로필(이름·기본 GitHub 조직 편집), 동기화(5종 마지막 시각 + "지금 실행" 버튼), API 키, 기타 연동(Google OAuth/Vault/ALLOWED_EMAIL), 테마. `app/(app)/settings/page.tsx` |
+| **`api_keys` 테이블** | `oauth_tokens` 패턴 그대로 — `pgp_sym_encrypt` + base64. (user_id, provider) unique. `masked_tail`(마지막 4자) + `verified_at` 메타. `lib/db/schema.ts` |
+| **암호화 키 재사용** | `OAUTH_TOKEN_KEY` 환경변수 (이미 .env.example에 정의된 키) — 새 env var 추가 안 함 |
+| **`lib/secrets/api-key-store.ts`** | save/load/delete/listMeta. listMeta는 평문 절대 안 내보냄 (UI 메타용). |
+| **`lib/secrets/resolver.ts`** | DB → process.env → `.env.local` → `gh auth token`(github only) 순. provider별 60초 in-memory 캐시. POST/DELETE 시 `invalidateApiKeyCache(provider)` |
+| **`lib/secrets/validators.ts`** | Anthropic `models.list({ limit: 1 })`, OpenAI `models.list()`, GitHub `/user`. 비용 ≈ $0. 401/403/429 분기 메시지. |
+| **클라이언트 factory async 화** | `getAnthropicClient()` / `getOpenAIClient()` / `getGithubToken()` 모두 async + resolver 사용. 싱글턴 제거 (키 회전 즉시 반영). 호출자 모두 이미 async 컨텍스트 → `await` 한 줄씩 추가만. |
+| **`POST /api/settings/api-keys`** | 검증 → 암호화 저장 → `users.settings_json.apiKeys.<provider>` deep merge → 캐시 무효화 |
+| **`DELETE /api/settings/api-keys?provider=`** | DB row 삭제 + settings_json에서 해당 provider 키 제거 → 다음 호출부터 env fallback |
+| **`GET /api/settings` 확장** | `integrations.apiKeys.{anthropic,openai,github}` 각각 `{ source: 'db'\|'env'\|'none', maskedTail?, verifiedAt? }` 형태 |
+| **UI — `ApiKeyCard`** | password type input + "검증하고 저장" + (DB 시) "삭제" 버튼. 상태 배지 3색 (검증됨 녹색 / .env fallback 노랑 / 미설정 회색). 마스킹 `••••••wxyz` |
+| **함정 회피** | (1) `lib/env/read.ts` 공유 헬퍼로 `lib/anthropic/client.ts` + `lib/openai/embeddings.ts`에 흩어진 `.env.local` fs 파싱 fallback 통합. (2) jsonb deep merge는 `\|\|` 연산자 + `jsonb_build_object`로 — `jsonb_set` + `sql.raw(provider)` 보다 안전. |
+| **검증 스크립트** | `scripts/verify-api-keys.ts` — pgcrypto roundtrip + masked_tail + settings_json deep merge + 기존 키 보존 모두 통과 확인 |
+| **빌드 / 검증** | `next build` 통과 (52 라우트), `/api/settings/api-keys` 등록 확인. dev 서버 unauthenticated 307 redirect 정상. |
+
+**관련 함정 (CLAUDE.md 누적)**:
+- `server-only` import는 tsx 직접 실행 스크립트에서 사용 불가 — 스크립트는 raw drizzle SQL로 우회.
+- 클라이언트 factory를 async로 바꿀 때 `streamAgent`처럼 SDK 메서드를 직접 반환하는 함수도 같이 async 화 필요. 호출자 한 곳(`app/api/agents/[name]/invoke/route.ts:341`) 에 `await` 추가.
 
 ### /goals Grit 스타일 개편 — ✅ 완료 (2026-05-07)
 

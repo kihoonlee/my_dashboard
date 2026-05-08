@@ -4,8 +4,7 @@
 
 import "server-only";
 import OpenAI from "openai";
-import { readFileSync } from "fs";
-import { resolve } from "path";
+import { resolveApiKey } from "@/lib/secrets/resolver";
 
 const EMBEDDING_MODEL = "text-embedding-3-small";
 const EMBEDDING_DIMENSIONS = 1024;
@@ -13,33 +12,18 @@ const MAX_INPUT_TOKENS = 8191; // text-embedding-3-* 한도
 // 한 번 호출당 batch input 한도 (OpenAI는 입력 배열 길이 2048까지). 안전 버퍼.
 const BATCH_LIMIT = 96;
 
-let client: OpenAI | null = null;
-let cachedKeyFromFile: string | undefined;
-
-function readApiKeyFromEnvFile(): string | undefined {
-  if (cachedKeyFromFile !== undefined) return cachedKeyFromFile;
-  try {
-    const content = readFileSync(resolve(process.cwd(), ".env.local"), "utf-8");
-    const m = content.match(/^OPENAI_API_KEY=(.+)$/m);
-    cachedKeyFromFile = m?.[1].trim();
-  } catch {
-    cachedKeyFromFile = undefined;
-  }
-  return cachedKeyFromFile;
-}
-
-export function getOpenAIClient(): OpenAI {
-  if (client) return client;
-  // .env.local에 'KEY= value'처럼 등호 뒤 공백이 있어도 dotenv는 그대로 보존하므로 trim.
-  let apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!apiKey || apiKey.length === 0) {
-    apiKey = readApiKeyFromEnvFile()?.trim();
-  }
+/**
+ * OpenAI 클라이언트 인스턴스 — 매 호출마다 생성 (키 회전 즉시 반영).
+ * 키 해소 우선순위: api_keys 테이블 → process.env / .env.local → throw.
+ */
+export async function getOpenAIClient(): Promise<OpenAI> {
+  const apiKey = await resolveApiKey("openai");
   if (!apiKey) {
-    throw new Error("OPENAI_API_KEY is not set in environment (.env.local).");
+    throw new Error(
+      "OPENAI_API_KEY not available. Set it in /settings or .env.local.",
+    );
   }
-  client = new OpenAI({ apiKey });
-  return client;
+  return new OpenAI({ apiKey });
 }
 
 /**
@@ -48,7 +32,7 @@ export function getOpenAIClient(): OpenAI {
  */
 export async function embedOne(text: string): Promise<number[]> {
   const trimmed = truncateForEmbedding(text);
-  const openai = getOpenAIClient();
+  const openai = await getOpenAIClient();
   const res = await openai.embeddings.create({
     model: EMBEDDING_MODEL,
     input: trimmed,
@@ -65,7 +49,7 @@ export async function embedOne(text: string): Promise<number[]> {
  */
 export async function embedMany(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return [];
-  const openai = getOpenAIClient();
+  const openai = await getOpenAIClient();
   const all: number[][] = [];
   for (let i = 0; i < texts.length; i += BATCH_LIMIT) {
     const batch = texts.slice(i, i + BATCH_LIMIT).map(truncateForEmbedding);
