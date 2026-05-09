@@ -12,6 +12,7 @@ import {
   Loader2,
   PauseCircle,
 } from "lucide-react";
+import { AgentAvatar } from "@/components/agent-badge";
 import { cn } from "@/lib/utils";
 
 type AgentItem = {
@@ -125,12 +126,11 @@ function AgentCard({ a }: { a: AgentItem }) {
         className="block rounded-xl border border-border bg-card p-4 hover:bg-card/80 transition-colors"
       >
         <header className="flex items-start gap-3">
-          <div
-            className="h-10 w-10 rounded-full flex items-center justify-center text-lg shrink-0"
-            style={{ backgroundColor: `${a.colorHex}20`, color: a.colorHex }}
-          >
-            {a.avatarEmoji ?? "🤖"}
-          </div>
+          <AgentAvatar
+            englishName={a.englishName}
+            size="lg"
+            className="ring-2 ring-background shadow-sm"
+          />
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-2">
               <span className="font-medium text-sm truncate">{a.name}</span>

@@ -8,6 +8,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { AgentAvatar } from "@/components/agent-badge";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -180,12 +181,11 @@ export default function AgentDetailPage() {
       </Link>
 
       <header className="flex items-start gap-3">
-        <div
-          className="h-12 w-12 rounded-full flex items-center justify-center text-2xl shrink-0"
-          style={{ backgroundColor: `${agent.colorHex}20`, color: agent.colorHex }}
-        >
-          {agent.avatarEmoji ?? "🤖"}
-        </div>
+        <AgentAvatar
+          englishName={agent.englishName}
+          size="xl"
+          className="ring-2 ring-background shadow-sm"
+        />
         <div className="flex-1">
           <div className="flex items-baseline gap-2">
             <h1 className="text-2xl font-bold tracking-tight">{agent.name}</h1>
