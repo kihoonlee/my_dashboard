@@ -45,23 +45,23 @@ export function AgentAvatar({
   const imageSrc = AGENT_PROFILE_IMAGES[englishName];
 
   const sizeClass = {
-    sm: "w-5 text-[10px]",
-    md: "w-7 text-xs",
-    lg: "w-10 text-sm",
-    xl: "w-12 text-base",
+    sm: "w-6 text-[10px]",
+    md: "w-9 text-xs",
+    lg: "w-14 text-sm",
+    xl: "w-32 text-xl",
   }[size];
   const imageSize = {
-    sm: "20px",
-    md: "28px",
-    lg: "40px",
-    xl: "48px",
+    sm: "24px",
+    md: "36px",
+    lg: "56px",
+    xl: "128px",
   }[size];
 
   return (
     <span
       aria-hidden
       className={cn(
-        "relative overflow-hidden rounded-lg aspect-[3/4] flex items-center justify-center text-white font-semibold shrink-0",
+        "relative overflow-hidden rounded-md aspect-[3/4] flex items-center justify-center text-white font-semibold shrink-0",
         sizeClass,
         className,
       )}
