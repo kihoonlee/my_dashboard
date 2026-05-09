@@ -131,3 +131,47 @@ export async function listCalendarEvents(params: {
   const json = (await res.json()) as { items?: GoogleCalendarEvent[] };
   return json.items ?? [];
 }
+
+export type GoogleCalendarListEntry = {
+  id: string;
+  summary?: string;
+  summaryOverride?: string;
+  description?: string;
+  backgroundColor?: string;
+  foregroundColor?: string;
+  primary?: boolean;
+  selected?: boolean;
+  deleted?: boolean;
+  hidden?: boolean;
+  accessRole?: string;
+};
+
+/**
+ * 사용자의 calendarList 항목(구독 캘린더 포함)을 반환한다.
+ * 기본은 표시(selected) 켜진 + 삭제/숨김 안 된 캘린더만.
+ * Google은 primary 캘린더에 selected 필드를 안 보낼 수 있어, 명시적 false만 제외.
+ */
+export async function listCalendars(params: {
+  accessToken: string;
+  includeHidden?: boolean;
+}): Promise<GoogleCalendarListEntry[]> {
+  const url = new URL(`${CALENDAR_BASE}/users/me/calendarList`);
+  url.searchParams.set("minAccessRole", "reader");
+  if (params.includeHidden) url.searchParams.set("showHidden", "true");
+
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${params.accessToken}` },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new GoogleAuthError(
+      `CalendarList.list 실패 (${res.status}): ${text.slice(0, 200)}`,
+    );
+  }
+  const json = (await res.json()) as { items?: GoogleCalendarListEntry[] };
+  const items = json.items ?? [];
+  return items.filter(
+    (c) => c.deleted !== true && c.hidden !== true && c.selected !== false,
+  );
+}

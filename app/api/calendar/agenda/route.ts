@@ -34,6 +34,8 @@ export async function GET(request: NextRequest) {
       location: calendarEventsCache.location,
       attendees: calendarEventsCache.attendees,
       syncedAt: calendarEventsCache.syncedAt,
+      calendarSummary: calendarEventsCache.calendarSummary,
+      calendarColorHex: calendarEventsCache.calendarColorHex,
     })
     .from(calendarEventsCache)
     .where(between(calendarEventsCache.startAt, start, end))

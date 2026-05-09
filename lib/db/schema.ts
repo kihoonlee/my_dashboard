@@ -262,7 +262,10 @@ export const calendarEventsCache = pgTable(
   "calendar_events_cache",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    googleEventId: text("google_event_id").notNull().unique(),
+    calendarId: text("calendar_id").notNull(),
+    calendarSummary: text("calendar_summary"),
+    calendarColorHex: text("calendar_color_hex"),
+    googleEventId: text("google_event_id").notNull(),
     title: text("title").notNull(),
     startAt: timestamp("start_at", { withTimezone: true }).notNull(),
     endAt: timestamp("end_at", { withTimezone: true }).notNull(),
@@ -275,6 +278,7 @@ export const calendarEventsCache = pgTable(
   },
   (t) => [
     index("calendar_events_cache_start_idx").on(t.startAt),
+    unique("calendar_events_cache_cal_event_uq").on(t.calendarId, t.googleEventId),
   ],
 );
 

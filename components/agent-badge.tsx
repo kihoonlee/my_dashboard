@@ -45,10 +45,10 @@ export function AgentAvatar({
   const imageSrc = AGENT_PROFILE_IMAGES[englishName];
 
   const sizeClass = {
-    sm: "h-5 w-5 text-[10px]",
-    md: "h-7 w-7 text-xs",
-    lg: "h-10 w-10 text-sm",
-    xl: "h-12 w-12 text-base",
+    sm: "w-5 text-[10px]",
+    md: "w-7 text-xs",
+    lg: "w-10 text-sm",
+    xl: "w-12 text-base",
   }[size];
   const imageSize = {
     sm: "20px",
@@ -61,7 +61,7 @@ export function AgentAvatar({
     <span
       aria-hidden
       className={cn(
-        "relative overflow-hidden rounded-full flex items-center justify-center text-white font-semibold shrink-0",
+        "relative overflow-hidden rounded-lg aspect-[3/4] flex items-center justify-center text-white font-semibold shrink-0",
         sizeClass,
         className,
       )}

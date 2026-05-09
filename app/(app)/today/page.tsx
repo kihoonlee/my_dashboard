@@ -45,6 +45,8 @@ type AgendaEvent = {
     responseStatus?: string;
   }>;
   syncedAt: string;
+  calendarSummary: string | null;
+  calendarColorHex: string | null;
 };
 
 type ToolEvent = {
@@ -465,11 +467,27 @@ export default function TodayPage() {
                 key={ev.id}
                 className="flex items-start gap-3 px-4 py-3 bg-card"
               >
-                <div className="font-mono text-xs text-muted-foreground w-24 shrink-0 pt-0.5">
-                  {formatEventTime(ev.startAt, ev.endAt)}
+                <div className="flex items-start gap-2 w-28 shrink-0 pt-0.5">
+                  <span
+                    aria-hidden
+                    title={ev.calendarSummary ?? ""}
+                    className="mt-1 size-2 rounded-full shrink-0"
+                    style={{
+                      backgroundColor:
+                        ev.calendarColorHex ?? "var(--muted-foreground)",
+                    }}
+                  />
+                  <div className="font-mono text-xs text-muted-foreground">
+                    {formatEventTime(ev.startAt, ev.endAt)}
+                  </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm truncate">{ev.title}</div>
+                  {ev.calendarSummary && (
+                    <div className="text-[11px] text-muted-foreground/80 truncate mt-0.5">
+                      {ev.calendarSummary}
+                    </div>
+                  )}
                   {ev.location && (
                     <div className="text-xs text-muted-foreground truncate mt-0.5">
                       {ev.location}

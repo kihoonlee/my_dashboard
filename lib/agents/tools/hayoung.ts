@@ -112,6 +112,8 @@ async function listEventsBetween(start: Date, end: Date) {
       location: calendarEventsCache.location,
       attendees: calendarEventsCache.attendees,
       syncedAt: calendarEventsCache.syncedAt,
+      calendar: calendarEventsCache.calendarSummary,
+      calendarColor: calendarEventsCache.calendarColorHex,
     })
     .from(calendarEventsCache)
     .where(between(calendarEventsCache.startAt, start, end))
