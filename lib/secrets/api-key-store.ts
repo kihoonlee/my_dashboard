@@ -10,12 +10,13 @@ import { db } from "@/lib/db/client";
 import { apiKeys } from "@/lib/db/schema";
 import { tsTz } from "@/lib/db/sql-utils";
 
-export type ApiKeyProvider = "anthropic" | "openai" | "github";
+export type ApiKeyProvider = "anthropic" | "openai" | "github" | "gemini";
 
 export const API_KEY_PROVIDERS: ApiKeyProvider[] = [
   "anthropic",
   "openai",
   "github",
+  "gemini",
 ];
 
 function getKey(): string {

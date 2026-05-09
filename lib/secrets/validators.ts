@@ -5,6 +5,7 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import OpenAI from "openai";
+import { GoogleGenAI } from "@google/genai";
 import type { ApiKeyProvider } from "@/lib/secrets/api-key-store";
 
 export type ValidateResult =
@@ -26,6 +27,8 @@ export async function validateApiKey(
       return validateOpenAI(trimmed);
     case "github":
       return validateGithub(trimmed);
+    case "gemini":
+      return validateGemini(trimmed);
   }
 }
 
@@ -48,6 +51,24 @@ async function validateOpenAI(apiKey: string): Promise<ValidateResult> {
     return { ok: true, detail: `models ${count}개 접근 OK` };
   } catch (e) {
     return mapError(e, "OpenAI");
+  }
+}
+
+async function validateGemini(apiKey: string): Promise<ValidateResult> {
+  try {
+    const client = new GoogleGenAI({ apiKey });
+    // 가벼운 ping — 1 토큰 generate.
+    const resp = await client.models.generateContent({
+      model: "gemini-3.1-flash-lite",
+      contents: "ping",
+      config: { maxOutputTokens: 1 },
+    });
+    const ok = !!resp.candidates;
+    return ok
+      ? { ok: true, detail: "generateContent ping OK" }
+      : { ok: false, error: "Gemini: 응답 없음" };
+  } catch (e) {
+    return mapError(e, "Gemini");
   }
 }
 

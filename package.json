@@ -21,6 +21,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.93.0",
     "@base-ui/react": "^1.4.1",
+    "@google/genai": "^2.0.1",
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.3",
     "class-variance-authority": "^0.7.1",

@@ -21,6 +21,7 @@ const PROVIDER_ENV: Record<ApiKeyProvider, string> = {
   anthropic: "ANTHROPIC_API_KEY",
   openai: "OPENAI_API_KEY",
   github: "GITHUB_PAT",
+  gemini: "GEMINI_API_KEY",
 };
 
 type ApiKeyState =

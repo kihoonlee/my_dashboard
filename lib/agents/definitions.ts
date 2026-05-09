@@ -4,8 +4,15 @@
  * System prompts are intentionally short here — Phase 1+ refines them per agent.
  */
 
+// 2026-05 multi-provider routing.
+// 혜원·민지(orchestrator)는 Anthropic Sonnet 4.6 유지 (HLE+tools 1위, sequential depth 강점).
+// 나머지 8명은 Gemini로 비용 최적화. Free tier에서 동작하는 GA 모델만 사용.
+//   - 2.5 Pro/3.1 Flash는 free tier에서 차단 (paid-only) → Flash 계열로 통일
 const SONNET = "claude-sonnet-4-6";
-const HAIKU = "claude-haiku-4-5-20251001";
+// 수민·현주·하영·서연 — $0.30/$2.50 (Sonnet 대비 -90% in / -83% out, Haiku 대비 -70%/-50%)
+const GEMINI_FLASH = "gemini-2.5-flash";
+// 도연·다솜·민영·정연 — $0.25/$1.50 (Haiku 대비 -75%/-70%)
+const GEMINI_FLASH_LITE = "gemini-3.1-flash-lite";
 
 type Trigger = {
   cron?: string[];
@@ -101,7 +108,7 @@ export const AGENT_SEEDS: AgentSeed[] = [
     englishName: "hayoung",
     role: "today_manager",
     description: "오늘 매니저 — Todo 분류·우선순위, 캘린더 일정 분석",
-    model: HAIKU,
+    model: GEMINI_FLASH, // (-50%/-40% vs Haiku 4.5)
     temperature: "0.4",
     maxTokens: 1024,
     systemPrompt: `당신은 활기차고 부지런한 오늘 매니저 하영입니다.
@@ -139,7 +146,7 @@ export const AGENT_SEEDS: AgentSeed[] = [
     englishName: "soomin",
     role: "goal_coach",
     description: "목표 코치 — 회고, 습관 추적, Year in Pixels 패턴 발견",
-    model: SONNET,
+    model: GEMINI_FLASH, // (-90%/-83% vs Sonnet 4.6, free tier OK)
     temperature: "0.6",
     maxTokens: 1024,
     systemPrompt: `당신은 따뜻하지만 단호한 목표 코치 수민입니다.
@@ -192,7 +199,7 @@ export const AGENT_SEEDS: AgentSeed[] = [
     englishName: "seoyeon",
     role: "knowledge_librarian",
     description: "지식 사서 — 옵시디언 검색·요약, Learnings 정리",
-    model: HAIKU,
+    model: GEMINI_FLASH, // (-50%/-40% vs Haiku 4.5)
     temperature: "0.3",
     maxTokens: 1024,
     systemPrompt: `당신은 차분하고 박학다식한 사서 서연입니다.
@@ -223,7 +230,7 @@ export const AGENT_SEEDS: AgentSeed[] = [
     englishName: "dasom",
     role: "capture_assistant",
     description: "캡처 비서 — 퀵 캡처 자동 분류, 읽을거리 큐, 학습 정리",
-    model: HAIKU,
+    model: GEMINI_FLASH_LITE, // (-75%/-70% vs Haiku 4.5)
     temperature: "0.4",
     maxTokens: 1024,
     systemPrompt: `당신은 세심하고 친근한 캡처 비서 다솜입니다.
@@ -259,7 +266,7 @@ export const AGENT_SEEDS: AgentSeed[] = [
     englishName: "hyunju",
     role: "business_manager",
     description: "사업 매니저 — 프로덕트 포트폴리오, GitHub 활동 요약",
-    model: SONNET,
+    model: GEMINI_FLASH, // (-90%/-83% vs Sonnet 4.6, free tier OK)
     temperature: "0.4",
     maxTokens: 1024,
     systemPrompt: `당신은 분석적이고 실용적인 사업 매니저 현주입니다.
@@ -290,7 +297,7 @@ export const AGENT_SEEDS: AgentSeed[] = [
     englishName: "doyeon",
     role: "dev_tools_manager",
     description: "개발 도구 관리자 — Claude Code skill 메타데이터, 사용 패턴 추적",
-    model: HAIKU,
+    model: GEMINI_FLASH_LITE, // (-75%/-70% vs Haiku 4.5)
     temperature: "0.3",
     maxTokens: 1024,
     systemPrompt: `당신은 정확하고 체계적인 개발 도구 관리자 도연입니다.
@@ -325,7 +332,7 @@ export const AGENT_SEEDS: AgentSeed[] = [
     englishName: "minyoung",
     role: "news_curator",
     description: "뉴스 큐레이터 — RSS·X·web search 통합, AI 요약",
-    model: HAIKU,
+    model: GEMINI_FLASH_LITE, // (-75%/-70% vs Haiku 4.5)
     temperature: "0.4",
     maxTokens: 1024,
     systemPrompt: `당신은 통찰력 있고 빠른 뉴스 큐레이터 민영입니다.
@@ -361,7 +368,7 @@ export const AGENT_SEEDS: AgentSeed[] = [
     englishName: "jeongyeon",
     role: "mail_organizer",
     description: "메일 정리자 — Gmail 필터링, 우선순위 분류, 답장 필요 메일 식별 (Phase 5-A 보류)",
-    model: HAIKU,
+    model: GEMINI_FLASH_LITE, // (-75%/-70% vs Haiku 4.5, 비활성)
     temperature: "0.3",
     maxTokens: 512,
     systemPrompt: `당신은 깔끔하고 효율적인 메일 정리자 정연입니다.

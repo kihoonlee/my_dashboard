@@ -1,6 +1,6 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-08 (설정 페이지 + API 키 관리 — UI 입력·검증·암호화 저장)**
+> 최종 업데이트: **2026-05-09 (Multi-provider LLM 라우팅 + Gemini 도입 — 8명 agent 비용 최적화)**
 > 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
 > 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md`
 
@@ -12,7 +12,7 @@
 
 - **유형**: 개인 프로젝트 (kihoonlee 계정)
 - **로드맵**: 10주 풀빌드 (기획서 그대로) + 11-12주 버퍼
-- **현재 위치**: **Phase 7 코드 완료 + 설정 페이지** — Vercel cron 4종, 모바일 반응형, Lighthouse 최적화, rate limiting, 구조화 로깅, RLS SQL, DEPLOYMENT.md. **`/settings` 페이지 추가** (프로필·동기화 트리거·API 키 입력/검증/암호화 저장·테마). 활성 Agent **9/10**, 1차 완료 체크리스트 **14/14**(개발 측면). 외부 가입(Vercel/Supabase production) 후 즉시 배포 가능.
+- **현재 위치**: **Phase 7 코드 완료 + 설정 페이지 + Multi-provider 라우팅** — Vercel cron 4종, 모바일 반응형, Lighthouse 최적화, rate limiting, 구조화 로깅, RLS SQL, DEPLOYMENT.md. `/settings` 페이지(프로필·동기화 트리거·API 키 입력/검증/암호화 저장·테마). **Anthropic + Gemini 2-provider 라우팅** — 혜원·민지(orchestrator) Sonnet 4.6 유지, 나머지 8명은 Gemini 2.5 Flash / 3.1 Flash-Lite로 -38~-90% 비용 절감. 활성 Agent **9/10**, 1차 완료 체크리스트 **14/14**(개발 측면). 외부 가입(Vercel/Supabase production) 후 즉시 배포 가능.
 
 ---
 
@@ -364,6 +364,38 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 2. Supabase production 프로젝트 신규 생성 + 스키마 push + RLS SQL 적용
 3. Google Cloud OAuth redirect URI에 production URL 추가
 4. (선택) Sentry 가입 + DSN 등록 + `npx @sentry/wizard` 실행
+
+### Multi-provider LLM 라우팅 + Gemini 도입 — ✅ 완료 (2026-05-09)
+
+OpenAI/Anthropic/Gemini 3개사 객관적 비교 후, 사용자 선택 — orchestrator(혜원·민지)는 Anthropic 유지, 나머지 8명은 Gemini로 비용 최적화. **Anthropic.Message 타입을 lingua franca**로 유지해 [route.ts](app/api/agents/[name]/invoke/route.ts) 무수정.
+
+| 영역 | 결과 |
+|---|---|
+| **모델 매핑 (10명)** | 혜원·민지 = `claude-sonnet-4-6` / 수민·현주·하영·서연 = `gemini-2.5-flash` / 도연·다솜·민영·정연 = `gemini-3.1-flash-lite`. user의 키가 free tier — 2.5 Pro/3.1 Pro는 paid-only라 Flash로 통일. |
+| **lib/llm/ 5개 파일** | router(dispatch) / anthropic-impl / gemini-impl / gemini-stream / translators / pricing. `lib/anthropic/{client,pricing}.ts`는 backward-compat re-export shim. |
+| **Provider 판별** | 모델 ID prefix — `gemini-*` → Gemini, 그 외 → Anthropic |
+| **Tool use 변환** | AgentTool ↔ Gemini FunctionDeclaration (parametersJsonSchema 사용). ToolUseBlock ↔ functionCall (id round-trip). ToolResultBlockParam ↔ functionResponse. |
+| **Streaming 어댑터** | `GeminiMessageStreamAdapter implements AsyncIterable<RawMessageStreamEvent> + finalMessage()` — Gemini chunk를 Anthropic content_block_delta로 yield. ~150줄. |
+| **API 키** | `lib/secrets/api-key-store.ts`의 ApiKeyProvider union에 `'gemini'` 추가. `/settings` UI에 자동 카드 등장. validators.ts에 `validateGemini` (generateContent ping). |
+| **Pricing 통합** | `lib/llm/pricing.ts`에 Anthropic + Gemini 가격표 통합. 2.5/3.1 family 모두 등록. |
+| **검증 스크립트** | `scripts/verify-gemini-adapter.ts` — generateContent / streaming / function calling 3종 직접 SDK 호출 검증 통과. e2e: `/api/agents/dasom/invoke` (Lite + tool) / `minyoung` / `hayoung` (Flash) 모두 정상 한국어 응답. |
+| **빌드 / DB seed** | `npm run build` 통과 (52 라우트), `npm run db:seed` → 8명 모델 ID 갱신 확인. |
+
+**비용 절감 시뮬레이션** (월 한도 60% 사용 가정):
+
+| 카테고리 | 현재 | 신규 | 절감 |
+|---|---|---|---|
+| 혜원·민지 (Sonnet 유지) | $42 | $42 | 0% |
+| 수민·현주 (Sonnet → 2.5-Flash) | $42 | $4.2 | -90% |
+| 하영·서연 (Haiku → 2.5-Flash) | $13.5 | $4.5 | -67% |
+| 도연·다솜·민영·정연 (Haiku → 3.1-Flash-Lite) | $18 | $3.6 | -80% |
+| **합계** | **$115.5/월** | **$54.3/월** | **-53%** |
+
+**관련 함정 (CLAUDE.md 누적)**:
+- **Gemini 모델 ID 검증 필수**: `gemini-3.1-pro` / `gemini-3.1-flash`는 GA 미공개 (preview만 존재). free tier에선 2.5 Pro도 paid-only(429). `models.list()` 결과 기준으로 `gemini-2.5-flash` + `gemini-3.1-flash-lite`만 안전.
+- **Gemini thoughtSignature 누락**: tool use roundtrip에서 후속 turn에 functionCall을 회신할 때 원래 응답의 `thoughtSignature` 필드를 같이 보내야 함 (없으면 `INVALID_ARGUMENT 400`). Anthropic ToolUseBlock에는 자리가 없으므로 `lib/llm/translators.ts`에 tool_use_id → signature Map으로 stash + 회신 시 복원.
+- **Anthropic.Usage 필수 필드 변동**: SDK 0.93.x에 `inference_geo` 필드 추가됨 — Gemini 정규화 시 `as unknown as Anthropic.Usage` 캐스팅 필요.
+- **`server-only` import는 tsx 직접 실행 스크립트에서 막힘**: 이전 함정과 동일. 검증 스크립트는 `@google/genai`를 직접 호출 (lib/llm 우회).
 
 ### 설정 페이지 + API 키 입력·검증·암호화 저장 — ✅ 완료 (2026-05-08)
 

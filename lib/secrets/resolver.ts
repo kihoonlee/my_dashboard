@@ -28,6 +28,7 @@ const ENV_VAR: Record<ApiKeyProvider, string> = {
   anthropic: "ANTHROPIC_API_KEY",
   openai: "OPENAI_API_KEY",
   github: "GITHUB_PAT",
+  gemini: "GEMINI_API_KEY",
 };
 
 let cachedUserId: string | null | undefined;

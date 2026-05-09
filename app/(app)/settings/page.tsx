@@ -41,6 +41,8 @@ type SyncMeta = {
   updated?: number;
   removed?: number;
   errors?: string[];
+  // calendar
+  calendarsSynced?: number;
   // github
   org?: string;
   repos?: number;
@@ -68,7 +70,7 @@ type ApiKeyState =
   | { source: "env" }
   | { source: "none" };
 
-type ApiKeyProvider = "anthropic" | "openai" | "github";
+type ApiKeyProvider = "anthropic" | "openai" | "github" | "gemini";
 
 type SettingsResponse = {
   profile: {
@@ -130,7 +132,9 @@ function describeSync(kind: SyncKind, meta: SyncMeta | null): string {
     case "calendar": {
       const c = meta.count ?? meta.upserts ?? 0;
       const stale = meta.deletedStale ?? 0;
-      return `${c}건 캐시 · 만료 정리 ${stale}`;
+      const cals = meta.calendarsSynced ?? 0;
+      const calsLabel = cals > 0 ? ` · 캘린더 ${cals}개` : "";
+      return `${c}건 캐시 · 만료 정리 ${stale}${calsLabel}`;
     }
     case "obsidian": {
       const up = meta.upserted ?? 0;
@@ -394,7 +398,7 @@ export default function SettingsPage() {
           삭제하면 .env.local 값으로 fallback.
         </p>
         <div className="flex flex-col gap-3">
-          {(["anthropic", "openai", "github"] as ApiKeyProvider[]).map(
+          {(["anthropic", "gemini", "openai", "github"] as ApiKeyProvider[]).map(
             (provider) => (
               <ApiKeyCard
                 key={provider}
@@ -571,7 +575,12 @@ const PROVIDER_META: Record<
   anthropic: {
     label: "Anthropic API Key",
     placeholder: "sk-ant-...",
-    doc: "Agent (혜원·민지·하영·서연 등) 호출에 사용",
+    doc: "혜원·민지 (orchestrator, Sonnet 4.6) 호출에 사용",
+  },
+  gemini: {
+    label: "Google Gemini API Key",
+    placeholder: "AIza...",
+    doc: "수민·현주·하영·서연·도연·다솜·민영·정연 (Gemini 3.1) 호출",
   },
   openai: {
     label: "OpenAI API Key",
