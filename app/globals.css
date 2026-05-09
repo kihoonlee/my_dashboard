@@ -153,9 +153,72 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "ss01", "cv01", "cv11";
+    /* Pretendard 권장 한글 가독성 + 라이닝 + 대체 자형 */
+    font-feature-settings: "ss01", "cv01", "cv11", "tnum";
+    /* 라이트↔다크 전환 부드럽게 (#10) */
+    transition:
+      background-color 200ms ease-out,
+      color 200ms ease-out;
+    line-height: 1.65;
+    letter-spacing: -0.005em;
   }
   html {
     @apply font-sans;
+    /* iOS auto-zoom 방지용 — 모바일 input 16px 보장은 inputs에서 별도 처리 */
+    -webkit-text-size-adjust: 100%;
+  }
+  /* 데이터 컬럼 숫자 정렬 흔들림 방지 (#12) */
+  .tabular-nums,
+  [class*="font-mono"] {
+    font-variant-numeric: tabular-nums;
+  }
+  /* 코드/숫자/시간 표시 영역에 자동 적용 */
+  code,
+  kbd,
+  samp,
+  time {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* CRITICAL — prefers-reduced-motion: 멀미·전정장애 대응 (#1) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* MEDIUM — Page transition: View Transitions API (Chromium 모던) (#9) */
+@view-transition {
+  navigation: auto;
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+}
+::view-transition-old(root) {
+  animation-name: vt-fade-out;
+}
+::view-transition-new(root) {
+  animation-name: vt-fade-in;
+}
+@keyframes vt-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes vt-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none !important;
   }
 }

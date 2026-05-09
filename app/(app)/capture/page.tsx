@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AgentBadge } from "@/components/agent-badge";
 import {
+  BookOpen,
   CheckCircle2,
   ExternalLink,
   Inbox,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { streamSseFetch } from "@/lib/sse/client";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type Capture = {
   id: string;
@@ -462,10 +464,11 @@ export default function CapturePage() {
           </div>
 
           {captures.length === 0 ? (
-            <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
-              <Inbox className="h-5 w-5 opacity-60" />
-              아직 캡처가 없습니다.
-            </div>
+            <EmptyState
+              icon={Inbox}
+              title="아직 캡처가 없습니다"
+              description="떠오른 생각·할 일·읽을거리를 위 입력창에 적으면 다솜이 자동으로 분류해드려요."
+            />
           ) : (
             <ul className="flex flex-col gap-2">
               {captures.map((c) => (
@@ -613,9 +616,21 @@ export default function CapturePage() {
           </div>
 
           {readItems.length === 0 ? (
-            <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm text-muted-foreground">
-              {readStatus === "unread" ? "읽을거리가 없습니다." : "비어있음"}
-            </div>
+            <EmptyState
+              icon={BookOpen}
+              title={
+                readStatus === "unread"
+                  ? "읽을거리가 없습니다"
+                  : readStatus === "read"
+                    ? "읽은 항목이 없습니다"
+                    : "보관된 항목이 없습니다"
+              }
+              description={
+                readStatus === "unread"
+                  ? "URL을 캡처하면 자동으로 읽을거리 큐에 추가돼요."
+                  : "안 읽음 → 읽음/보관으로 이동하면 여기 쌓입니다."
+              }
+            />
           ) : (
             <ul className="flex flex-col divide-y divide-border border border-border rounded-xl overflow-hidden">
               {readItems.map((r) => (
@@ -685,9 +700,11 @@ export default function CapturePage() {
           </div>
 
           {learnings.length === 0 ? (
-            <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm text-muted-foreground">
-              저장된 학습이 없습니다.
-            </div>
+            <EmptyState
+              icon={Sparkles}
+              title="저장된 학습이 없습니다"
+              description="책·아티클·대화에서 얻은 통찰을 위 폼에 적어두면 나중에 검색·회고에 활용돼요."
+            />
           ) : (
             <ul className="flex flex-col gap-2">
               {learnings.map((l) => (

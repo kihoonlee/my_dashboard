@@ -17,13 +17,13 @@ export function FloatingChatButton() {
       href="/chat"
       aria-label="민지에게 물어보기"
       title="민지에게 물어보기"
-      className="fixed bottom-6 right-6 z-40 inline-flex items-center justify-center w-12 h-12 rounded-full text-white shadow-lg hover:opacity-90 transition-opacity active:translate-y-px"
+      className="fixed bottom-6 right-6 z-40 inline-flex items-center justify-center w-14 h-14 rounded-full text-white shadow-lg hover:opacity-90 transition-opacity active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       style={{
         backgroundColor: "var(--agent-minji)",
         boxShadow: "0 8px 16px -4px rgba(92, 124, 250, 0.35)",
       }}
     >
-      <MessageCircle className="h-5 w-5" />
+      <MessageCircle className="h-6 w-6" aria-hidden />
     </Link>
   );
 }

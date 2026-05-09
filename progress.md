@@ -1,6 +1,6 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-09 (Multi-provider LLM 라우팅 + Gemini 도입 — 8명 agent 비용 최적화)**
+> 최종 업데이트: **2026-05-10 (UI/UX 풀 패스 — a11y·skeleton·tabular nums·toast·page transition 13항목)**
 > 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
 > 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md`
 
@@ -365,7 +365,33 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 3. Google Cloud OAuth redirect URI에 production URL 추가
 4. (선택) Sentry 가입 + DSN 등록 + `npx @sentry/wizard` 실행
 
-### Multi-provider LLM 라우팅 + Gemini 도입 — ✅ 완료 (2026-05-09)
+### UI/UX 풀 패스 (a11y·skeleton·tabular·toast·view-transitions·empty states·heading) — ✅ 완료 (2026-05-10)
+
+`/ui-ux-pro-max` 스킬 audit 결과 13개 발견 항목 전부 구현. 사용자 작업 중인 wiki/knowledge feature와 충돌 회피 (`goals/page.tsx`, `knowledge/page.tsx`, `seoyeon.ts`, `shared.ts`, `scanner.ts`, `vercel.json` 미수정).
+
+| Pri | 항목 | 결과 |
+|---|---|---|
+| 🚨 #1 | `prefers-reduced-motion` 전역 룰 | `app/globals.css` — `*,*::before,*::after { animation/transition-duration: 0.01ms !important }`. WCAG 통과. |
+| 🚨 #2 | Skeleton 컴포넌트 | `components/ui/skeleton.tsx` (Skeleton·SkeletonLines·SkeletonCard). HomeDashboard 초기 로딩에서 spinner 대신 skeleton 적용. |
+| 🚨 #3 | Focus ring 일관화 | sidebar 링크·로그아웃·모바일 닫기 / header 햄버거·검색 / floating-chat-button 모두 `focus-visible:ring-2 ring-offset-*` 추가 |
+| 🟠 #4 | Mobile 터치 타깃 44px | Header 햄버거 / Sidebar 모바일 닫기 `min-h-11 min-w-11` (44px). FloatingChat 48→56px. |
+| 🟠 #5 | Header 검색 a11y | `aria-label="검색 또는 명령 팔레트 열기 (단축키 ⌘K 또는 Ctrl+K)"`, 햄버거 아이콘 `aria-hidden` |
+| 🟠 #6 | Pretendard 한글 leading | body `line-height: 1.65`, `letter-spacing: -0.005em`, `font-feature-settings`에 `tnum` 추가 |
+| 🟠 #7 | Empty state | `components/ui/empty-state.tsx` (icon+title+description+action). today(Todo·캘린더), capture(captures·readItems·learnings), news(브리핑·items) 6곳 적용 |
+| 🟠 #8 | Footer 노이즈 | "Next.js 16 · Tailwind v4 · Sonnet 4.6 / Haiku 4.5" → "MyHub · 1인 정보 허브 · Anthropic Sonnet 4.6 + Google Gemini 2.5/3.1" (현재 모델 정보로 갱신) |
+| 🟡 #9 | Page transition | `@view-transition` API + ::view-transition fade 180ms. reduced-motion에선 비활성. |
+| 🟡 #10 | Theme toggle smooth | body에 `transition: background-color 200ms, color 200ms` |
+| 🟡 #11 | Toast 시스템 | `sonner` 2.0.7 도입. `app/layout.tsx`에 `<Toaster position="bottom-right" richColors closeButton theme="system">`. `aria-live="polite"` 자동 — focus 안 빼앗음. |
+| 🟡 #12 | Tabular nums | globals.css `font-feature-settings: "tnum"`, `code/kbd/samp/time` 자동 적용. `.tabular-nums` 유틸 보존. |
+| 🟡 #13 | Heading 계층 | home-dashboard 위젯 h3 → h2 (페이지 h1 → home-hero h2와 동일 레벨 sibling). 다른 페이지는 정상 확인. |
+
+**검증**: `npm run build` 통과 (52+ 라우트). 새 lint 에러 없음. 4 변경 파일 + 2 신규 컴포넌트 파일 = 13개 파일.
+
+**관련 함정 (CLAUDE.md 누적)**:
+- 사용자가 동시 진행 중인 untracked 변경(wiki/knowledge feature 818줄+)이 있으면 그 파일은 만지지 말 것 — 충돌 회피 위해 명시적 제외 목록 작성 후 작업.
+- shadcn `Button`은 `focus-visible:border-ring focus-visible:ring-3 ring-ring/50` 내장 — 별도 추가 불필요. Custom button(`<button>`/`<Link>`)에만 focus-visible utility 추가.
+
+
 
 OpenAI/Anthropic/Gemini 3개사 객관적 비교 후, 사용자 선택 — orchestrator(혜원·민지)는 Anthropic 유지, 나머지 8명은 Gemini로 비용 최적화. **Anthropic.Message 타입을 lingua franca**로 유지해 [route.ts](app/api/agents/[name]/invoke/route.ts) 무수정.
 

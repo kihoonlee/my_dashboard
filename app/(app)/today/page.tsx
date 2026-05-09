@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { streamSseFetch } from "@/lib/sse/client";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type Todo = {
   id: string;
@@ -337,9 +338,11 @@ export default function TodayPage() {
           </span>
         </div>
         {todos.length === 0 && !loadingTodos ? (
-          <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm text-muted-foreground">
-            오늘 처리할 Todo가 없습니다. 하영에게 새로 만들어달라고 요청해보세요.
-          </div>
+          <EmptyState
+            icon={CheckSquare}
+            title="오늘 처리할 Todo가 없습니다"
+            description="하단 채팅에 '오늘 X 해야 해'라고 말하면 하영이 자동으로 추가해드려요."
+          />
         ) : (
           <ul className="flex flex-col divide-y divide-border border border-border rounded-xl overflow-hidden">
             {todos.map((todo) => (
@@ -452,14 +455,23 @@ export default function TodayPage() {
         )}
 
         {loadingEvents ? (
-          <div className="text-xs text-muted-foreground">캐시 로딩 중...</div>
-        ) : events.length === 0 ? (
-          <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
-            <CalendarClock className="h-5 w-5 opacity-60" />
-            {lastSync
-              ? "오늘은 일정이 없습니다."
-              : "아직 동기화하지 않았습니다. 위 '동기화' 버튼을 눌러 가져오세요."}
+          <div className="text-xs text-muted-foreground" role="status" aria-busy="true">
+            캐시 로딩 중...
           </div>
+        ) : events.length === 0 ? (
+          <EmptyState
+            icon={CalendarClock}
+            title={
+              lastSync
+                ? "오늘은 일정이 없습니다"
+                : "캘린더 아직 동기화 안 됨"
+            }
+            description={
+              lastSync
+                ? "Google Calendar에서 추가하면 다음 동기화 때 반영돼요."
+                : "위쪽 '동기화' 버튼을 눌러 Google Calendar에서 가져오세요."
+            }
+          />
         ) : (
           <ul className="flex flex-col divide-y divide-border border border-border rounded-xl overflow-hidden">
             {events.map((ev) => (

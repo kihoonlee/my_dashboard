@@ -21,8 +21,8 @@ export default function Home() {
 
         <HomeDashboard />
 
-        <footer className="text-xs text-muted-foreground border-t border-border pt-4">
-          Next.js 16 · Tailwind v4 · shadcn/ui · Pretendard · Toss Blue · Sonnet 4.6 / Haiku 4.5
+        <footer className="text-xs text-muted-foreground/70 border-t border-border pt-4">
+          MyHub · 1인 정보 허브 · 10명 AI Agent (Anthropic Sonnet 4.6 + Google Gemini 2.5/3.1)
         </footer>
       </main>
     </div>

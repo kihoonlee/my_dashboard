@@ -15,11 +15,11 @@ import {
   AlertCircle,
   CalendarClock,
   CheckSquare,
-  Loader2,
   Pause,
   Sparkles,
   XCircle,
 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type TeamAgent = {
   id: string;
@@ -127,9 +127,15 @@ export function HomeDashboard() {
 
   if (loading && !data) {
     return (
-      <div className="flex items-center justify-center py-8 text-muted-foreground text-sm">
-        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-        대시보드 로딩 중...
+      <div
+        className="grid gap-4 md:grid-cols-2"
+        role="status"
+        aria-busy="true"
+        aria-label="대시보드 로딩 중"
+      >
+        <Skeleton className="h-48 rounded-2xl" />
+        <Skeleton className="h-48 rounded-2xl" />
+        <Skeleton className="h-32 rounded-2xl md:col-span-2" />
       </div>
     );
   }
@@ -162,10 +168,10 @@ function TodaySummaryWidget({ data }: { data: DashboardData }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5 flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-primary" />
+        <h2 className="text-sm font-semibold flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" aria-hidden />
           오늘 요약
-        </h3>
+        </h2>
         <span className="text-[10px] text-muted-foreground font-mono">
           1분마다 자동 갱신
         </span>
@@ -235,7 +241,7 @@ function TeamStatusWidget({ data }: { data: DashboardData }) {
   return (
     <div className="rounded-2xl border border-border bg-card p-5 flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold">AI 팀 ({summary.activeCount}/{agents.length})</h3>
+        <h2 className="text-sm font-semibold">AI 팀 ({summary.activeCount}/{agents.length})</h2>
         <Link
           href="/agents"
           className="text-[11px] text-primary hover:underline"
@@ -315,7 +321,7 @@ function RecentActivityWidget({
         className,
       )}
     >
-      <h3 className="font-semibold">최근 활동</h3>
+      <h2 className="text-sm font-semibold">최근 활동</h2>
 
       {activity.length === 0 ? (
         <div className="text-sm text-muted-foreground text-center py-6">

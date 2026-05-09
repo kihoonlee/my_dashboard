@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ThemeProvider, NO_FLASH_SCRIPT } from "@/components/theme-provider";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "MyHub — Personal Dashboard",
@@ -32,7 +33,21 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: NO_FLASH_SCRIPT }} />
       </head>
       <body className="min-h-full flex flex-col">
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          {children}
+          {/* aria-live="polite" 자동 — focus 안 뺏음. theme="system" 으로 light/dark 자동 */}
+          <Toaster
+            position="bottom-right"
+            richColors
+            closeButton
+            theme="system"
+            toastOptions={{
+              classNames: {
+                toast: "font-sans",
+              },
+            }}
+          />
+        </ThemeProvider>
       </body>
     </html>
   );

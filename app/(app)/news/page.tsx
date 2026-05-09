@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { streamSseFetch } from "@/lib/sse/client";
+import { EmptyState } from "@/components/ui/empty-state";
 
 type NewsSource = {
   id: string;
@@ -394,10 +395,11 @@ export default function NewsPage() {
             </div>
           </div>
         ) : (
-          <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
-            <Newspaper className="h-5 w-5 opacity-60" />
-            오늘자 브리핑이 없습니다. RSS 동기화 → 브리핑 생성 순서로 만드세요.
-          </div>
+          <EmptyState
+            icon={Newspaper}
+            title="오늘자 브리핑이 없습니다"
+            description="RSS 동기화로 최신 글을 모은 뒤 '브리핑 생성'을 눌러 민영의 한국어 요약을 받아보세요."
+          />
         )}
       </section>
 
@@ -494,9 +496,11 @@ export default function NewsPage() {
         )}
 
         {items.length === 0 ? (
-          <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm text-muted-foreground">
-            최근 48시간 수집된 뉴스가 없습니다. Source 추가 + 동기화를 해보세요.
-          </div>
+          <EmptyState
+            icon={Newspaper}
+            title="최근 48시간 수집된 뉴스가 없습니다"
+            description="Source를 추가한 뒤 RSS 동기화를 실행하면 여기 채워져요."
+          />
         ) : (
           <ul className="flex flex-col divide-y divide-border border border-border rounded-xl overflow-hidden">
             {items.slice(0, 50).map((it) => (

@@ -114,14 +114,14 @@ export function Sidebar() {
             </span>
             <span className="text-xs text-muted-foreground">9/10</span>
           </Link>
-          {/* 모바일 닫기 버튼 */}
+          {/* 모바일 닫기 버튼 — 44px 터치 타깃 */}
           <button
             type="button"
             onClick={() => setOpen(false)}
-            className="md:hidden p-1 rounded-md hover:bg-sidebar-accent text-muted-foreground"
+            className="md:hidden inline-flex items-center justify-center min-h-11 min-w-11 -mr-2 rounded-md hover:bg-sidebar-accent text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar"
             aria-label="사이드바 닫기"
           >
-            <X className="h-4 w-4" />
+            <X className="h-4 w-4" aria-hidden />
           </button>
         </div>
 
@@ -137,8 +137,9 @@ export function Sidebar() {
                   <Link
                     href={href}
                     title={`${label} (${phase})`}
+                    aria-current={active ? "page" : undefined}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
                       active
                         ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
                         : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
@@ -157,7 +158,7 @@ export function Sidebar() {
           <form action="/auth/signout" method="post">
             <button
               type="submit"
-              className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-lg hover:bg-sidebar-accent/60"
+              className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-lg hover:bg-sidebar-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar"
             >
               로그아웃
             </button>
