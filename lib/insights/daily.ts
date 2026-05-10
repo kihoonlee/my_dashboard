@@ -31,7 +31,6 @@ JSON 외 텍스트 금지.`;
 export type InsightContext = {
   habits: Array<{ name: string; rate14d: number; loggedDays: number }>;
   pendingTodos: number;
-  yesterdayMood: number | null;
   hasWeeklyReview: boolean;
 };
 
@@ -49,9 +48,6 @@ export async function generateDailyInsight(
   ctx: InsightContext,
 ): Promise<InsightResult> {
   const lines: string[] = [];
-  if (ctx.yesterdayMood !== null) {
-    lines.push(`어제 mood: ${ctx.yesterdayMood}/5`);
-  }
   if (ctx.habits.length === 0) {
     lines.push("활성 습관: 없음");
   } else {

@@ -1,11 +1,12 @@
 "use client";
 
-// /goals — Grit 스타일 메인 대시보드.
-// 메인: 데일리 모티베이션 + 오늘 진척 + 습관 카드 그리드.
-// 탭: 목표 / Year in Pixels / 주간 회고 + 수민 채팅.
+// /goals — Grit 스타일 단일 흐름 페이지.
+// 위에서 아래로: 데일리 모티베이션 → 오늘의 습관 → 장기 목표
+// → 이번 주 회고 → 수민 코칭. 탭 없이 한 스크롤로 코칭 흐름이 이어진다.
 // 습관 detail은 /goals/habits/[id]에서.
+// (무드 히트맵 / Year in Pixels는 2026-05-10 폐기)
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { AgentBadge } from "@/components/agent-badge";
 import {
@@ -32,13 +33,6 @@ type Goal = {
   progress: number;
   status: string;
   createdAt: string;
-};
-
-type YearPixel = {
-  date: string;
-  moodScore: number;
-  colorHex: string | null;
-  note: string | null;
 };
 
 type WeeklyReview = {
@@ -79,16 +73,6 @@ type ChatMessage = {
   meta?: { iterations: number; durationMs: number; costUsd: number };
 };
 
-type Tab = "goals" | "pixels" | "review";
-
-const COLOR_BY_SCORE: Record<number, string> = {
-  1: "#dc2626",
-  2: "#fb923c",
-  3: "#facc15",
-  4: "#84cc16",
-  5: "#16a34a",
-};
-
 function isoDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
@@ -103,7 +87,6 @@ function startOfThisWeek(): Date {
 }
 
 export default function GoalsPage() {
-  const [tab, setTab] = useState<Tab>("goals");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
@@ -122,10 +105,6 @@ export default function GoalsPage() {
     title: "",
     targetDate: "",
   });
-
-  // Year in Pixels
-  const [year, setYear] = useState<number>(new Date().getFullYear());
-  const [pixels, setPixels] = useState<YearPixel[]>([]);
 
   // Weekly review
   const [reviewWeekStart, setReviewWeekStart] = useState<string>(
@@ -156,15 +135,6 @@ export default function GoalsPage() {
       setError(`목표 조회 실패: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
-  async function fetchPixels(y: number) {
-    try {
-      const res = await fetch(`/api/year-pixels?year=${y}`, { cache: "no-store" });
-      const data = await res.json();
-      setPixels(data.pixels ?? []);
-    } catch (e) {
-      setError(`Year in Pixels 실패: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
   async function fetchReview(weekStart: string) {
     try {
       const res = await fetch(`/api/weekly-reviews?weekStart=${weekStart}`, {
@@ -180,7 +150,6 @@ export default function GoalsPage() {
   useEffect(() => {
     void fetchDashboard();
     void fetchGoals();
-    void fetchPixels(year);
     void fetchReview(reviewWeekStart);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -255,21 +224,6 @@ export default function GoalsPage() {
       await fetchGoals();
     } catch (e) {
       setError(`목표 삭제 실패: ${e instanceof Error ? e.message : String(e)}`);
-    }
-  }
-
-  // ── Year in Pixels ──
-  async function setMood(date: string, moodScore: number) {
-    try {
-      const res = await fetch("/api/year-pixels", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, moodScore }),
-      });
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      await fetchPixels(year);
-    } catch (e) {
-      setError(`Mood 저장 실패: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -394,17 +348,10 @@ export default function GoalsPage() {
       void Promise.all([
         fetchDashboard(),
         fetchGoals(),
-        fetchPixels(year),
         fetchReview(reviewWeekStart),
       ]);
     }
   }
-
-  const pixelsByDate = useMemo(() => {
-    const map = new Map<string, YearPixel>();
-    for (const p of pixels) map.set(p.date, p);
-    return map;
-  }, [pixels]);
 
   const summary = dashboard?.summary ?? null;
   const habits = dashboard?.habits ?? [];
@@ -414,9 +361,9 @@ export default function GoalsPage() {
       <header className="flex items-center gap-3">
         <AgentBadge englishName="soomin" size="lg" showName={false} />
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">목표 · 회고</h1>
+          <h1 className="text-2xl font-bold tracking-tight">목표 · 코칭</h1>
           <p className="text-sm text-muted-foreground">
-            수민이 매일 인사이트, 습관 코칭, 회고를 함께합니다.
+            오늘 → 이번 주 → 올해. 수민과 한 흐름으로 보고 다듬습니다.
           </p>
         </div>
       </header>
@@ -435,10 +382,13 @@ export default function GoalsPage() {
       {/* 메인: 데일리 모티베이션 */}
       <DailyMotivationCard />
 
-      {/* 메인: 오늘 진척 + 습관 그리드 */}
+      {/* 오늘의 습관 */}
       <section className="flex flex-col gap-3">
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <h2 className="text-lg font-semibold">오늘의 습관</h2>
+        <div className="flex items-end justify-between flex-wrap gap-2">
+          <SectionHeader
+            title="오늘의 습관"
+            sub="작은 것 하나라도 매일. 카드를 눌러 체크, 화살표로 90일 자취를 보세요."
+          />
           {summary && (
             <div className="flex items-center gap-3 text-xs text-muted-foreground font-mono">
               <span>
@@ -476,9 +426,11 @@ export default function GoalsPage() {
         </div>
 
         {habits.length === 0 ? (
-          <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm text-muted-foreground">
-            아직 등록된 습관이 없습니다.
-          </div>
+          <EmptyState
+            icon={<Sparkles className="h-5 w-5 opacity-60" />}
+            title="아직 습관이 없어요"
+            sub="‘매일 30분 산책’ 하나로 시작해도 충분합니다."
+          />
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {habits.map((h) => (
@@ -488,238 +440,178 @@ export default function GoalsPage() {
         )}
       </section>
 
-      {/* 보조 탭 */}
-      <div className="flex items-center gap-1 border-b border-border">
-        {(
-          [
-            ["goals", "목표"],
-            ["pixels", "Year in Pixels"],
-            ["review", "주간 회고"],
-          ] as const
-        ).map(([k, label]) => (
-          <button
-            key={k}
-            onClick={() => setTab(k)}
-            className={cn(
-              "px-3 py-2 text-sm border-b-2 -mb-px transition-colors",
-              tab === k
-                ? "border-primary text-foreground font-medium"
-                : "border-transparent text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {tab === "goals" && (
-        <section className="flex flex-col gap-3">
-          <div className="flex items-end gap-2 flex-wrap">
-            <div className="flex flex-col gap-1 flex-[2] min-w-[200px]">
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                목표 제목
-              </label>
-              <input
-                value={newGoal.title}
-                onChange={(e) => setNewGoal((p) => ({ ...p, title: e.target.value }))}
-                placeholder="예: Q2 안에 MyHub Phase 7 배포"
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
-              />
-            </div>
-            <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
-              <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                마감일 (선택)
-              </label>
-              <input
-                type="date"
-                value={newGoal.targetDate}
-                onChange={(e) => setNewGoal((p) => ({ ...p, targetDate: e.target.value }))}
-                className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
-              />
-            </div>
-            <Button onClick={addGoal} disabled={!newGoal.title.trim()} size="sm" className="gap-1.5">
-              <Plus className="h-3.5 w-3.5" />
-              추가
-            </Button>
+      {/* 장기 목표 */}
+      <section className="flex flex-col gap-3">
+        <SectionHeader
+          title="장기 목표"
+          sub="이번 분기·해 단위로 가져갈 큰 그림. 진척바를 옮겨 자취를 남기세요."
+        />
+        <div className="flex items-end gap-2 flex-wrap">
+          <div className="flex flex-col gap-1 flex-[2] min-w-[200px]">
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              새 목표
+            </label>
+            <input
+              value={newGoal.title}
+              onChange={(e) => setNewGoal((p) => ({ ...p, title: e.target.value }))}
+              placeholder="예: Q2 안에 MyHub Phase 7 배포"
+              className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
+            />
           </div>
-
-          {goals.length === 0 ? (
-            <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm text-muted-foreground flex flex-col items-center gap-2">
-              <Target className="h-5 w-5 opacity-60" />
-              아직 등록된 목표가 없습니다.
-            </div>
-          ) : (
-            <ul className="flex flex-col gap-2">
-              {goals.map((g) => (
-                <li key={g.id} className="border border-border rounded-xl bg-card p-3 flex flex-col gap-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm">{g.title}</div>
-                      {g.description && (
-                        <p className="text-xs text-muted-foreground mt-0.5">{g.description}</p>
-                      )}
-                      <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-1 font-mono">
-                        <span>{g.type}</span>
-                        {g.targetDate && <span>마감 {g.targetDate}</span>}
-                        <span className={g.status === "done" ? "text-emerald-600" : ""}>
-                          {g.status}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => deleteGoal(g.id)}
-                      className="text-muted-foreground hover:text-destructive p-1 rounded"
-                      aria-label="삭제"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      step="5"
-                      value={g.progress}
-                      onChange={(e) => updateProgress(g.id, parseInt(e.target.value, 10))}
-                      className="flex-1"
-                    />
-                    <span className="text-xs font-mono text-muted-foreground w-10 text-right">
-                      {g.progress}%
-                    </span>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      )}
-
-      {tab === "pixels" && (
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                const y = year - 1;
-                setYear(y);
-                void fetchPixels(y);
-              }}
-              className="px-2 py-1 text-sm rounded border border-border hover:bg-muted"
-            >
-              ←
-            </button>
-            <span className="font-mono text-sm">{year}</span>
-            <button
-              onClick={() => {
-                const y = year + 1;
-                setYear(y);
-                void fetchPixels(y);
-              }}
-              className="px-2 py-1 text-sm rounded border border-border hover:bg-muted"
-            >
-              →
-            </button>
-            <span className="text-xs text-muted-foreground ml-2">
-              {pixels.length}일 기록됨
-            </span>
-          </div>
-
-          <YearPixelGrid year={year} pixelsByDate={pixelsByDate} onSet={setMood} />
-
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-            <span>오늘 ({today}):</span>
-            {[1, 2, 3, 4, 5].map((s) => (
-              <button
-                key={s}
-                onClick={() => setMood(today, s)}
-                className="w-6 h-6 rounded border border-border"
-                style={{ background: COLOR_BY_SCORE[s] }}
-                aria-label={`mood ${s}`}
-                title={`mood ${s}`}
-              />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {tab === "review" && (
-        <section className="flex flex-col gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
+            <label className="text-[10px] uppercase tracking-wider text-muted-foreground">
+              마감일 (선택)
+            </label>
             <input
               type="date"
-              value={reviewWeekStart}
-              onChange={(e) => {
-                setReviewWeekStart(e.target.value);
-                void fetchReview(e.target.value);
-              }}
-              className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
+              value={newGoal.targetDate}
+              onChange={(e) => setNewGoal((p) => ({ ...p, targetDate: e.target.value }))}
+              className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
             />
-            <span className="text-xs text-muted-foreground">
-              주간 시작 (월요일 기준 권장)
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={generateReview}
-              disabled={generatingReview}
-              className="gap-2 ml-auto"
-            >
-              {generatingReview ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Sparkles className="h-3.5 w-3.5" />
-              )}
-              {review ? "다시 생성" : "회고 생성"}
-            </Button>
           </div>
+          <Button onClick={addGoal} disabled={!newGoal.title.trim()} size="sm" className="gap-1.5">
+            <Plus className="h-3.5 w-3.5" />
+            추가
+          </Button>
+        </div>
 
-          {review ? (
-            <div className="border border-border rounded-xl bg-card p-4 flex flex-col gap-3">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
-                <ReviewStat label="완료한 Todo" value={review.todosCompleted} />
-                <ReviewStat
-                  label="습관 완료율"
-                  value={`${Math.round(parseFloat(review.habitsCompletionRate ?? "0") * 100)}%`}
-                />
-                <ReviewStat label="GitHub 커밋" value={review.githubCommits} />
-                <ReviewStat label="옵시디언 변경" value={review.obsidianNotesCreated} />
-              </div>
-              {review.aiSummary && (
-                <p className="text-sm leading-relaxed border-t border-border pt-3">
-                  {review.aiSummary}
-                </p>
-              )}
-              {review.aiSuggestions && review.aiSuggestions.length > 0 && (
-                <div className="border-t border-border pt-3 flex flex-col gap-1">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    제안
-                  </h3>
-                  <ul className="flex flex-col gap-1">
-                    {review.aiSuggestions.map((s, i) => (
-                      <li key={i} className="text-sm flex items-start gap-2">
-                        <span className="text-primary mt-0.5">→</span>
-                        <span>{s}</span>
-                      </li>
-                    ))}
-                  </ul>
+        {goals.length === 0 ? (
+          <EmptyState
+            icon={<Target className="h-5 w-5 opacity-60" />}
+            title="아직 큰 목표가 없어요"
+            sub="작게 한 줄이라도 적어두면 매일의 습관이 의미를 가집니다."
+          />
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {goals.map((g) => (
+              <li key={g.id} className="border border-border rounded-xl bg-card p-3 flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-sm">{g.title}</div>
+                    {g.description && (
+                      <p className="text-xs text-muted-foreground mt-0.5">{g.description}</p>
+                    )}
+                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground mt-1 font-mono">
+                      <span>{g.type}</span>
+                      {g.targetDate && <span>마감 {g.targetDate}</span>}
+                      <span className={g.status === "done" ? "text-emerald-600" : ""}>
+                        {g.status}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => deleteGoal(g.id)}
+                    className="text-muted-foreground hover:text-destructive p-1 rounded"
+                    aria-label="삭제"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
                 </div>
-              )}
-              <div className="text-[10px] font-mono text-muted-foreground">
-                생성 {new Date(review.createdAt).toLocaleString("ko-KR")}
-              </div>
-            </div>
-          ) : (
-            <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm text-muted-foreground">
-              이 주 회고가 없습니다. &apos;회고 생성&apos;을 누르면 자동 집계 +
-              수민의 한 단락 요약을 만듭니다.
-            </div>
-          )}
-        </section>
-      )}
+                <div className="flex items-center gap-3">
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="5"
+                    value={g.progress}
+                    onChange={(e) => updateProgress(g.id, parseInt(e.target.value, 10))}
+                    className="flex-1"
+                  />
+                  <span className="text-xs font-mono text-muted-foreground w-10 text-right">
+                    {g.progress}%
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-      {/* 수민 채팅 */}
+      {/* 이번 주 회고 */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-semibold">수민과 대화</h2>
+        <SectionHeader
+          title="이번 주 회고"
+          sub="Todo·습관·코드·노트가 한 단락으로 묶입니다. 매주 일요일 자동 생성, 수동 생성도 가능."
+        />
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="date"
+            value={reviewWeekStart}
+            onChange={(e) => {
+              setReviewWeekStart(e.target.value);
+              void fetchReview(e.target.value);
+            }}
+            className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm"
+          />
+          <span className="text-xs text-muted-foreground">
+            주간 시작 (월요일 기준 권장)
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={generateReview}
+            disabled={generatingReview}
+            className="gap-2 ml-auto"
+          >
+            {generatingReview ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5" />
+            )}
+            {review ? "다시 생성" : "회고 생성"}
+          </Button>
+        </div>
+
+        {review ? (
+          <div className="border border-border rounded-xl bg-card p-4 flex flex-col gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center">
+              <ReviewStat label="완료한 Todo" value={review.todosCompleted} />
+              <ReviewStat
+                label="습관 완료율"
+                value={`${Math.round(parseFloat(review.habitsCompletionRate ?? "0") * 100)}%`}
+              />
+              <ReviewStat label="GitHub 커밋" value={review.githubCommits} />
+              <ReviewStat label="옵시디언 변경" value={review.obsidianNotesCreated} />
+            </div>
+            {review.aiSummary && (
+              <p className="text-sm leading-relaxed border-t border-border pt-3">
+                {review.aiSummary}
+              </p>
+            )}
+            {review.aiSuggestions && review.aiSuggestions.length > 0 && (
+              <div className="border-t border-border pt-3 flex flex-col gap-1">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  다음 한 걸음
+                </h3>
+                <ul className="flex flex-col gap-1">
+                  {review.aiSuggestions.map((s, i) => (
+                    <li key={i} className="text-sm flex items-start gap-2">
+                      <span className="text-primary mt-0.5">→</span>
+                      <span>{s}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            <div className="text-[10px] font-mono text-muted-foreground">
+              생성 {new Date(review.createdAt).toLocaleString("ko-KR")}
+            </div>
+          </div>
+        ) : (
+          <EmptyState
+            icon={<Sparkles className="h-5 w-5 opacity-60" />}
+            title="이 주 회고가 아직 없어요"
+            sub="‘회고 생성’을 누르면 한 주의 자취를 자동 집계하고 수민이 한 단락으로 정리합니다."
+          />
+        )}
+      </section>
+
+      {/* 수민 코칭 */}
+      <section className="flex flex-col gap-3">
+        <SectionHeader
+          title="수민 코칭"
+          sub="목표·습관·회고 — 막히는 지점을 적어주세요. 수민이 작은 다음 행동을 제안해줍니다."
+        />
         <div className="flex flex-col gap-3 min-h-[200px]">
           {messages.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-6">
@@ -816,6 +708,33 @@ export default function GoalsPage() {
   );
 }
 
+function SectionHeader({ title, sub }: { title: string; sub?: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function EmptyState({
+  icon,
+  title,
+  sub,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  sub?: string;
+}) {
+  return (
+    <div className="border border-dashed border-border rounded-xl p-6 text-center text-sm flex flex-col items-center gap-1.5">
+      <div className="text-muted-foreground">{icon}</div>
+      <div className="font-medium text-foreground/90">{title}</div>
+      {sub && <p className="text-xs text-muted-foreground max-w-md">{sub}</p>}
+    </div>
+  );
+}
+
 function ReviewStat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="flex flex-col items-center">
@@ -827,55 +746,3 @@ function ReviewStat({ label, value }: { label: string; value: number | string })
   );
 }
 
-function YearPixelGrid({
-  year,
-  pixelsByDate,
-  onSet,
-}: {
-  year: number;
-  pixelsByDate: Map<string, YearPixel>;
-  onSet: (date: string, score: number) => void;
-}) {
-  const months = Array.from({ length: 12 }, (_, m) => m);
-  return (
-    <div className="overflow-x-auto">
-      <div className="flex gap-1.5 min-w-fit">
-        {months.map((m) => {
-          const days = new Date(year, m + 1, 0).getDate();
-          return (
-            <div key={m} className="flex flex-col items-center gap-0.5">
-              <div className="text-[10px] text-muted-foreground font-mono">
-                {String(m + 1).padStart(2, "0")}
-              </div>
-              <div className="grid grid-cols-1 gap-0.5">
-                {Array.from({ length: days }, (_, d) => {
-                  const dateStr = `${year}-${String(m + 1).padStart(2, "0")}-${String(d + 1).padStart(2, "0")}`;
-                  const pixel = pixelsByDate.get(dateStr);
-                  return (
-                    <button
-                      key={dateStr}
-                      onClick={() => {
-                        const next = window.prompt(
-                          `${dateStr} mood 1-5 (현재: ${pixel?.moodScore ?? "—"})`,
-                          String(pixel?.moodScore ?? ""),
-                        );
-                        if (!next) return;
-                        const n = parseInt(next, 10);
-                        if (n >= 1 && n <= 5) onSet(dateStr, n);
-                      }}
-                      className="w-3 h-3 rounded-sm border border-border hover:ring-1 hover:ring-primary"
-                      style={{
-                        background: pixel?.colorHex ?? "transparent",
-                      }}
-                      title={`${dateStr}${pixel ? ` · ${pixel.moodScore}` : ""}${pixel?.note ? ` · ${pixel.note}` : ""}`}
-                    />
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}

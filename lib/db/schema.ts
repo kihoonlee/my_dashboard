@@ -354,16 +354,7 @@ export const habitLogs = pgTable(
   (t) => [unique("habit_logs_habit_date_unique").on(t.habitId, t.date)],
 );
 
-export const yearPixels = pgTable("year_pixels", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  date: date("date").notNull().unique(),
-  moodScore: integer("mood_score").notNull(),
-  colorHex: text("color_hex"),
-  note: text("note"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
+// year_pixels (mood heatmap) 테이블 제거됨 — 2026-05-10 무드 히트맵 기능 폐기.
 
 // ============================================================
 // KNOWLEDGE

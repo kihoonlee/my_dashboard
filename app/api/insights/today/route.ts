@@ -10,7 +10,6 @@ import {
   todos,
   users,
   weeklyReviews,
-  yearPixels,
 } from "@/lib/db/schema";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureUser } from "@/lib/users/ensure";
@@ -68,9 +67,6 @@ export async function POST() {
   const userId = await ensureUser(user);
 
   const today = isoDate(new Date());
-  const yesterday = new Date();
-  yesterday.setDate(yesterday.getDate() - 1);
-  const yesterdayIso = isoDate(yesterday);
   const since = new Date();
   since.setDate(since.getDate() - 14);
   const sinceIso = isoDate(since);
@@ -122,14 +118,6 @@ export async function POST() {
     );
   const pendingTodos = pendingRow[0]?.cnt ?? 0;
 
-  // 어제 mood
-  const [yesterdayPixel] = await db
-    .select()
-    .from(yearPixels)
-    .where(eq(yearPixels.date, yesterdayIso))
-    .limit(1);
-  const yesterdayMood = yesterdayPixel?.moodScore ?? null;
-
   // 이번 주 회고 존재 여부
   const weekStart = isoDate(startOfWeek(new Date()));
   const [review] = await db
@@ -144,7 +132,6 @@ export async function POST() {
     result = await generateDailyInsight({
       habits: habitsCtx,
       pendingTodos,
-      yesterdayMood,
       hasWeeklyReview,
     });
   } catch (e) {

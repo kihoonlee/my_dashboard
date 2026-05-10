@@ -13,7 +13,6 @@ import {
   todos,
   users,
   weeklyReviews,
-  yearPixels,
 } from "@/lib/db/schema";
 import { and, asc, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
 import { completionRate14d } from "@/lib/habits/streak";
@@ -116,14 +115,6 @@ export async function GET(request: NextRequest) {
         );
       const pendingTodos = pendingRow[0]?.cnt ?? 0;
 
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const [pixel] = await db
-        .select()
-        .from(yearPixels)
-        .where(eq(yearPixels.date, isoDate(yesterday)))
-        .limit(1);
-
       const weekStartIso = isoDate(startOfWeek(new Date()));
       const [review] = await db
         .select({ id: weeklyReviews.id })
@@ -134,7 +125,6 @@ export async function GET(request: NextRequest) {
       const insight = await generateDailyInsight({
         habits: habitsCtx,
         pendingTodos,
-        yesterdayMood: pixel?.moodScore ?? null,
         hasWeeklyReview: !!review,
       });
 

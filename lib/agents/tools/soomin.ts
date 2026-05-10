@@ -1,11 +1,11 @@
 // 수민(goal_coach) 전용 tool.
-// 목표(goals) + 습관(habits/habit_logs) + Year in Pixels(year_pixels) + 주간 회고(weekly_reviews).
+// 목표(goals) + 습관(habits/habit_logs) + 주간 회고(weekly_reviews).
+// (무드 히트맵 / Year in Pixels는 2026-05-10 폐기)
 //
 // 도구:
 //   - list_goals(status?), create_goal(title, description?, type?, targetDate?), update_goal_progress(id, progress)
 //   - list_habits(includeArchived?), log_habit(habitId, date?, completed, note?)
 //   - get_habit_stats(weeks?) — 최근 N주 완료율
-//   - get_year_pixels(year?), set_mood(date, score, note?)
 //   - get_weekly_review(weekStart?) — 저장된 회고 조회
 //   - generate_weekly_review(weekStart?) — 새로 생성 (LLM 호출)
 //   - daily_insight() — 오늘자 모티베이션 (Haiku, 캐시 우선)
@@ -19,7 +19,6 @@ import {
   habitLogs,
   users,
   weeklyReviews,
-  yearPixels,
 } from "@/lib/db/schema";
 import { and, asc, desc, eq, gte, isNull, lt, lte, or, sql } from "drizzle-orm";
 import type { AgentTool } from "@/lib/anthropic/client";
@@ -110,30 +109,6 @@ export const SOOMIN_TOOLS: AgentTool[] = [
           description: "기본 4, 최대 12",
         },
       },
-    },
-  },
-  {
-    name: "get_year_pixels",
-    description: "Year in Pixels — 특정 연도의 mood 기록 모두.",
-    input_schema: {
-      type: "object",
-      properties: {
-        year: { type: "number", description: "기본 올해" },
-      },
-    },
-  },
-  {
-    name: "set_mood",
-    description:
-      "특정 날짜의 mood score(1-5)를 기록. 같은 날 재호출 시 덮어쓰기.",
-    input_schema: {
-      type: "object",
-      properties: {
-        date: { type: "string", description: "YYYY-MM-DD" },
-        moodScore: { type: "number", description: "1=최악 ~ 5=최고" },
-        note: { type: "string" },
-      },
-      required: ["date", "moodScore"],
     },
   },
   {
@@ -235,14 +210,6 @@ function startOfWeek(d: Date): Date {
   x.setDate(x.getDate() - diff);
   return x;
 }
-
-const COLOR_BY_SCORE: Record<number, string> = {
-  1: "#dc2626",
-  2: "#fb923c",
-  3: "#facc15",
-  4: "#84cc16",
-  5: "#16a34a",
-};
 
 export async function runSoominTool(
   name: string,
@@ -399,36 +366,6 @@ export async function runSoominTool(
           },
         };
       }
-      case "get_year_pixels": {
-        const year = asNumber(input.year) ?? new Date().getFullYear();
-        const start = `${year}-01-01`;
-        const end = `${year + 1}-01-01`;
-        const rows = await db
-          .select()
-          .from(yearPixels)
-          .where(and(gte(yearPixels.date, start), lt(yearPixels.date, end)));
-        return { ok: true, result: { year, count: rows.length, pixels: rows } };
-      }
-      case "set_mood": {
-        const date = asString(input.date);
-        const moodScore = asNumber(input.moodScore);
-        if (!date || moodScore === undefined || moodScore < 1 || moodScore > 5) {
-          return {
-            ok: false,
-            error: "date and moodScore (1-5) are required",
-          };
-        }
-        const colorHex = COLOR_BY_SCORE[Math.round(moodScore)];
-        await db.execute(sql`
-          INSERT INTO year_pixels (date, mood_score, color_hex, note, created_at)
-          VALUES (${date}::date, ${moodScore}, ${colorHex}, ${asString(input.note) ?? null}, now())
-          ON CONFLICT (date) DO UPDATE SET
-            mood_score = EXCLUDED.mood_score,
-            color_hex = EXCLUDED.color_hex,
-            note = EXCLUDED.note
-        `);
-        return { ok: true, result: { date, moodScore, colorHex } };
-      }
       case "get_weekly_review": {
         const weekStart =
           asString(input.weekStart) ?? isoDate(startOfWeek(new Date()));
@@ -534,14 +471,6 @@ export async function runSoominTool(
           return { name: h.name, rate14d: r.rate, loggedDays: r.logged };
         });
 
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const [pixel] = await db
-          .select()
-          .from(yearPixels)
-          .where(eq(yearPixels.date, isoDate(yesterday)))
-          .limit(1);
-
         const weekStart = isoDate(startOfWeek(new Date()));
         const [review] = await db
           .select({ id: weeklyReviews.id })
@@ -552,7 +481,6 @@ export async function runSoominTool(
         const result = await generateDailyInsight({
           habits: habitsCtx,
           pendingTodos: 0, // 도구 호출에서는 todo 불요 (간단히)
-          yesterdayMood: pixel?.moodScore ?? null,
           hasWeeklyReview: !!review,
         });
 

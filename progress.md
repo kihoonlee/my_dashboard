@@ -1,6 +1,6 @@
 # MyHub — 진행 상황 (Progress)
 
-> 최종 업데이트: **2026-05-10 (UI/UX 풀 패스 — a11y·skeleton·tabular nums·toast·page transition 13항목)**
+> 최종 업데이트: **2026-05-10 (무드 히트맵/Year in Pixels 폐기 + UI/UX 풀 패스 13항목)**
 > 기반 문서: `MyHub_기획서_v2.1.md` (1,448줄, Windows PC 보관)
 > 개발 계획: `~/.claude/plans/prograss-md-http-prograss-md-temporal-glacier.md`
 
@@ -364,6 +364,23 @@ Windows에서 멈췄던 "DB push/seed 검증" 작업을 Mac으로 옮겨와 마�
 2. Supabase production 프로젝트 신규 생성 + 스키마 push + RLS SQL 적용
 3. Google Cloud OAuth redirect URI에 production URL 추가
 4. (선택) Sentry 가입 + DSN 등록 + `npx @sentry/wizard` 실행
+
+### 무드 히트맵 (Year in Pixels) 폐기 — ✅ 완료 (2026-05-10)
+
+기능을 사용하지 않는다고 판단 → UI·API·DB·agent 도구·cron 컨텍스트까지 **전체 제거**. 데이터 0건이라 마이그레이션 손실 없음.
+
+| 영역 | 변경 |
+|---|---|
+| **DB schema** | `year_pixels` 테이블 정의 삭제. `db:push:force`로 `DROP TABLE year_pixels CASCADE` 적용. |
+| **API** | `app/api/year-pixels/route.ts` 디렉터리 자체 삭제. |
+| **goals/page.tsx** | "무드 히트맵" 섹션·`YearPixelGrid` 컴포넌트·`COLOR_BY_SCORE`·`setMood`·`fetchPixels`·`pixelsByDate` useMemo·`YearPixel` type 일괄 제거. `useMemo` import도 제거. |
+| **lib/agents/tools/soomin.ts** | `get_year_pixels` / `set_mood` tool 정의 + handler 케이스 제거. `yearPixels` schema import + `COLOR_BY_SCORE` 헬퍼 제거. `daily_insight` handler에서 어제 mood 조회 로직 삭제. |
+| **lib/agents/definitions.ts** | 수민 시스템 프롬프트의 `- mood: get_year_pixels(year?) / set_mood(date, moodScore)` 줄 제거. `data_read` permissions에서 `"year_pixels"` 제거. |
+| **app/api/insights/today/route.ts** | `yesterdayMood` 컨텍스트 + `yearPixels` import + `yesterdayIso` 변수 제거. |
+| **app/api/cron/daily-morning/route.ts** | 동일 패턴으로 `yesterdayMood` 제거. |
+| **lib/insights/daily.ts** | `InsightContext.yesterdayMood` 필드 제거 + 프롬프트 build에서 "어제 mood" 줄 제거. |
+
+**검증**: `npm run build` 통과, `db:seed`로 수민 새 프롬프트 반영 확인 (`year_pixels` 정규식 grep 결과 schema.ts의 폐기 주석 1줄 외 없음). `to_regclass('year_pixels')` 결과 NULL.
 
 ### UI/UX 풀 패스 (a11y·skeleton·tabular·toast·view-transitions·empty states·heading) — ✅ 완료 (2026-05-10)
 
