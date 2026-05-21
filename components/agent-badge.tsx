@@ -5,30 +5,16 @@ import Image from "next/image";
 import { cn } from "@/lib/utils";
 
 const KOREAN_NAMES: Record<string, string> = {
-  hyewon: "혜원",
-  hayoung: "하영",
-  soomin: "수민",
-  seoyeon: "서연",
-  dasom: "다솜",
-  hyunju: "현주",
-  doyeon: "도연",
-  minyoung: "민영",
-  jeongyeon: "정연",
-  minji: "민지",
+  main: "지원",
+  assistant: "태오",
+  daily: "새벽",
+  diary: "달이",
+  memo: "노트",
+  calendar: "시아",
 };
 
-const AGENT_PROFILE_IMAGES: Record<string, string> = {
-  hyewon: "/agents/hyewon.png",
-  hayoung: "/agents/hayoung.png",
-  soomin: "/agents/soomin.png",
-  seoyeon: "/agents/seoyeon.png",
-  dasom: "/agents/dasom.png",
-  hyunju: "/agents/hyunju.png",
-  doyeon: "/agents/doyeon.png",
-  minyoung: "/agents/minyoung.png",
-  jeongyeon: "/agents/jeongyeon.png",
-  minji: "/agents/minji.png",
-};
+// v2 — 프로필 이미지는 추가될 때 /public/agents/{englishName}.png 로 두면 자동 매핑.
+const AGENT_PROFILE_IMAGES: Record<string, string> = {};
 
 export function AgentAvatar({
   englishName,

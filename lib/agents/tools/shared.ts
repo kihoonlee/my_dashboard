@@ -8,16 +8,12 @@ import { agents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 const KOREAN_NAMES: Record<string, string> = {
-  hyewon: "혜원 (오케스트레이터)",
-  hayoung: "하영 (오늘 매니저)",
-  soomin: "수민 (목표 코치)",
-  seoyeon: "서연 (지식 사서)",
-  dasom: "다솜 (캡처 비서)",
-  hyunju: "현주 (사업 매니저)",
-  doyeon: "도연 (개발 도구)",
-  minyoung: "민영 (뉴스 큐레이터)",
-  jeongyeon: "정연 (메일 정리자)",
-  minji: "민지 (메타 챗봇)",
+  main: "지원 (메인 비서·CSO·토론 진행)",
+  assistant: "태오 (보조·CTO·반대 시각)",
+  daily: "새벽 (데일리 리포터)",
+  diary: "달이 (일기 어시스턴트)",
+  memo: "노트 (메모 어시스턴트)",
+  calendar: "시아 (캘린더 어시스턴트)",
 };
 
 /**
@@ -31,7 +27,7 @@ export function makeAskAgentTool(allowedAgents: string[]): AgentTool | null {
     .join("\n");
   return {
     name: "ask_agent",
-    description: `다른 AI Agent에게 위임 질문. 호출 가능한 Agent:\n${list}\n\n사용자 요청을 자연어 그대로 'message'에 넣어 전달하면 해당 Agent가 자기 도구로 처리한 결과 텍스트를 반환한다. 도메인이 명확할 때(오늘 일정/Todo → hayoung, 일일 종합 브리핑 → hyewon 등)만 사용. 단순 정보는 직접 답하라.`,
+    description: `다른 AI Agent에게 위임 질문. 호출 가능한 Agent:\n${list}\n\n사용자 요청을 자연어 그대로 'message'에 넣어 전달하면 해당 Agent가 자기 도구로 처리한 결과 텍스트를 반환한다. 도메인이 명확할 때(일기·검색 → diary, 메모·todo 요약 → memo, 캘린더 등록 → calendar)만 사용. 단순 정보는 직접 답하라.`,
     input_schema: {
       type: "object",
       properties: {
@@ -53,10 +49,13 @@ export function makeAskAgentTool(allowedAgents: string[]): AgentTool | null {
 /**
  * ask_agent tool 실행. callerDepth는 현재 agent의 호출 깊이 (시작은 0).
  * 다음 호출은 callerDepth + 1로 헤더 전달.
+ * callerUserId는 사용자 식별자 — 내부 fetch 시 x-myhub-user-id 헤더로 forward해
+ * 호출 대상 도구가 user-scoped 쿼리를 수행할 수 있게 한다.
  */
 export async function runAskAgent(
   callerEnglishName: string,
   callerDepth: number,
+  callerUserId: string,
   input: Record<string, unknown>,
 ): Promise<{ ok: true; result: unknown } | { ok: false; error: string }> {
   const targetAgent = typeof input.agent === "string" ? input.agent : "";
@@ -87,6 +86,32 @@ export async function runAskAgent(
     return { ok: false, error: "self-invocation not allowed" };
   }
 
+  // 호출 대상이 비활성/일시정지면 LLM 호출 없이 즉시 거부 (환각 방지).
+  // 호출자는 이 메시지를 그대로 사용자에게 전달해야 한다 — 절대 가상 데이터로 채우지 말 것.
+  const [target] = await db
+    .select({
+      isActive: agents.isActive,
+      isPausedReason: agents.isPausedReason,
+    })
+    .from(agents)
+    .where(eq(agents.englishName, targetAgent))
+    .limit(1);
+  if (!target) {
+    return { ok: false, error: `target agent ${targetAgent} not found` };
+  }
+  if (!target.isActive) {
+    const reason = target.isPausedReason
+      ? `비활성: ${target.isPausedReason}`
+      : "현재 비활성 상태(데이터 미연동)";
+    return {
+      ok: true,
+      result: {
+        text: `[${targetAgent}] ${reason}. 데이터가 없어 답변할 수 없습니다. 절대 가상 데이터로 채우지 말고 이 사실을 사용자에게 그대로 알리세요.`,
+        costUsd: 0,
+      },
+    };
+  }
+
   // 내부 invoke route를 호출. NEXT_PUBLIC_APP_URL을 base로 사용.
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL ?? "http://127.0.0.1:3000";
@@ -98,10 +123,10 @@ export async function runAskAgent(
       headers: {
         "Content-Type": "application/json",
         "x-myhub-agent-depth": String(callerDepth + 1),
-        // 내부 호출은 proxy.ts 인증 우회를 위해 server-side fetch 후 server runtime의
-        // 쿠키 컨텍스트 통과 — Next 16에서는 같은 origin에 fetch 시 cookies가 없으므로
-        // proxy가 reject할 수 있다. depth 헤더가 있으면 proxy가 통과시키도록 추가 분기 필요.
+        // 내부 호출은 proxy.ts 인증 우회를 위한 플래그.
         "x-myhub-internal-call": "1",
+        // 사용자 식별자 forward — invoke route가 도구에 user-scoped 쿼리용으로 전달.
+        "x-myhub-user-id": callerUserId,
       },
       body: JSON.stringify({
         message,

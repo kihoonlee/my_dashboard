@@ -183,6 +183,20 @@ URL `?session=<uuid>`로 세션 재진입(히스토리 GET). 클라이언트는 
 - `tsTz`는 null/undefined도 받아 `NULL::timestamptz` 반환. date(only)는 `dateLiteral`.
 - drizzle ORM의 `db.insert(...).values({ts: new Date()})` 같은 객체 빌더 경로는 자동 변환되므로 영향 없음. raw `sql` 템플릿에서만 발생.
 
+**drizzle-orm raw `sql` 템플릿에 JS 배열 보간 금지 — `($1, $2, …)` record로 펼쳐짐**
+- `sql\`... col = ANY(${arr}::uuid[])\`` 패턴 → 단일 array 파라미터가 아니라 **각 요소가 개별 positional param인 record**로 풀려서 `ANY(($1,$2,…)::uuid[])`가 됨. record→array 캐스트 불가 → `Failed query: ... product_id = ANY(($1, $2, ...)::uuid[])` 에러.
+- 재발한 함정 (interest_topics 도입 시 collect / route / minyoung 3곳 동시).
+- **해결**: ORM 빌더의 `inArray(col, arr)` + `selectDistinctOn` / `groupBy` / `leftJoin` 등 사용. raw `sql` 회피.
+  ```ts
+  // ❌ 안 됨
+  sql\`SELECT ... WHERE topic_id = ANY(${ids}::uuid[])\`
+  // ✅ 권장
+  db.select(...).from(t).where(inArray(t.topicId, ids)).groupBy(t.topicId);
+  // ✅ DISTINCT ON도 빌더로 가능 (pg-core)
+  db.selectDistinctOn([t.productId], {...}).from(t).orderBy(t.productId, desc(t.periodStart));
+  ```
+- 정 raw로 써야 하면 `sql.raw('ARRAY[' + arr.map(...).join(',') + ']')` 같이 명시 직렬화 — SQL injection 위험이라 input 출처 신뢰 가능할 때만.
+
 **`.env.local`의 등호 뒤 공백은 값에 그대로 포함됨**
 - `KEY= value` 처럼 `=` 다음에 공백을 넣으면 `process.env.KEY` 값이 `" value"`(앞 공백 포함)로 들어감. dotenv 표준은 trim 안 함.
 - API 키 같은 경우 인증 헤더에 `Bearer  sk-...`처럼 박혀 401. 사용자가 "키 박았는데 안 됨" 호소하는 케이스의 흔한 원인.
@@ -198,6 +212,24 @@ URL `?session=<uuid>`로 세션 재진입(히스토리 GET). 클라이언트는 
 **prompt caching invariant**
 - prefix match — system prompt 첫 부분에 `Date.now()` / `uuid()` 같은 변동값 박으면 cache 전혀 안 됨. `{current_time}` 같은 placeholder 치환은 시스템 프롬프트 **끝부분**으로 옮기거나, message 쪽에 넣을 것 (현재는 시드 시스템 프롬프트 시작부에 있어서 cache 효과 제한적 — 추후 정밀화 대상).
 - `cache_read_input_tokens > 0`인지로 검증. 0이면 silent invalidator 의심.
+
+### LLM / Tool Use (multi-provider)
+
+**Gemini의 `functionResponse.response`는 JSON object만 — array는 reject**
+- 에러: `Invalid JSON payload received. Unknown name "response" at 'contents[N].parts[M].function_response': Proto field is not repeating, cannot start list.`
+- Gemini protobuf에서 `functionResponse.response`는 single message field — array(`[...]`)로 시작하면 `INVALID_ARGUMENT 400`. Anthropic은 array도 받기 때문에 같은 코드가 Claude에선 통과하다 Gemini-routed agent로 라우팅된 직후 첫 tool round-trip에서 폭발.
+- 재발한 함정: 수민 `list_habits`만 결과를 vanilla array로 반환했고(다른 list_X는 모두 `{ count, X: [] }` wrap), 수민이 `gemini-2.5-flash`로 라우팅돼서 터짐.
+- **해결 (2 layer)**:
+  1. **모든 tool 결과는 object로 wrap.** `return { ok: true, result: { count, items: arr } }` 패턴. 단순 array 직접 return 금지.
+  2. **안전망 — `lib/llm/translators.ts:parseToolResultContent`** 가 array 받으면 `{ items: [...] }`로 자동 wrap. primitive면 `{ result: prim }`. 이 안전망 덕에 미래 같은 실수가 silent 통과되긴 하지만, 의도한 형태는 명시 1번.
+- 진단: agent_logs에 풀 메시지 저장됨. `select error_message from agent_logs where is_error and english_name='X' order by created_at desc limit 1;`
+
+**Gemini SDK의 `parametersJsonSchema` vs 레거시 `parameters` (Schema)**
+- `lib/llm/translators.ts:toolsToGemini`가 JSON Schema를 그대로 `parametersJsonSchema`로 통과시킴 (lossless). 레거시 `parameters: Schema`로 변환 안 함.
+- 단, **JSON Schema의 모든 키워드를 Gemini가 받는 건 아님**. `$schema`, `$id`, `$ref`, `oneOf`/`anyOf`/`allOf`, `additionalProperties` 같은 건 reject 가능. 도구 입력 schema는 단순하게 (`type`/`properties`/`required`/`enum`/`description`/`items`)만 쓸 것.
+
+**Tool description / system prompt에서 모델 차이**
+- Gemini는 tool 호출을 결정할 때 **description의 한국어 → 영어** 가중치가 Claude보다 약함. "이 도구를 반드시 호출하라"라고 명령형으로 넣어도 무시하고 평문 답변 가능. 회피책: system prompt 행동규칙에 "X를 물으면 list_X 도구로 답하라"처럼 명시.
 
 ### 도구 / 환경
 

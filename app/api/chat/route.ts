@@ -1,7 +1,8 @@
 // POST /api/chat
-// 민지 메인 채팅 엔드포인트 — SSE 스트리밍 응답.
+// 멀티 에이전트 채팅 엔드포인트 — SSE 스트리밍 응답.
 //
-// body: { sessionId?: string, message: string }
+// body: { sessionId?: string, message: string, agent?: string }
+//   agent — 영문명 (main/assistant/daily/diary/memo/calendar). 기본 "main".
 //
 // 흐름:
 // 1. Supabase 세션 → public.users 매핑 보장 (없으면 upsert)
@@ -32,8 +33,17 @@ function jsonError(error: string, status: number): Response {
   });
 }
 
+const ALLOWED_AGENTS = new Set([
+  "main",
+  "assistant",
+  "daily",
+  "diary",
+  "memo",
+  "calendar",
+]);
+
 export async function POST(request: NextRequest) {
-  let body: { sessionId?: string; message?: string };
+  let body: { sessionId?: string; message?: string; agent?: string };
   try {
     body = await request.json();
   } catch {
@@ -41,6 +51,8 @@ export async function POST(request: NextRequest) {
   }
   const userMessageText = body.message?.trim();
   if (!userMessageText) return jsonError("message is required", 400);
+  const agentName =
+    body.agent && ALLOWED_AGENTS.has(body.agent) ? body.agent : "main";
 
   const supabase = await createSupabaseServerClient();
   const {
@@ -50,12 +62,20 @@ export async function POST(request: NextRequest) {
 
   const userId = await ensureUser(authUser);
 
+  // 선택된 에이전트의 id (chat_sessions.agentId 영속화용)
+  const [selectedAgent] = await db
+    .select({ id: agents.id })
+    .from(agents)
+    .where(eq(agents.englishName, agentName))
+    .limit(1);
+
   let sessionId = body.sessionId;
   if (!sessionId) {
     const [created] = await db
       .insert(chatSessions)
       .values({
         userId,
+        agentId: selectedAgent?.id ?? null,
         title:
           userMessageText.length > 40
             ? userMessageText.slice(0, 40) + "..."
@@ -80,13 +100,14 @@ export async function POST(request: NextRequest) {
     .returning({ id: chatMessages.id });
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://127.0.0.1:3000";
-  const upstream = await fetch(`${baseUrl}/api/agents/minji/invoke`, {
+  const upstream = await fetch(`${baseUrl}/api/agents/${agentName}/invoke`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "text/event-stream",
       "x-myhub-internal-call": "1",
       "x-myhub-agent-depth": "0",
+      "x-myhub-user-id": userId,
     },
     body: JSON.stringify({ message: userMessageText, trigger: "chat" }),
   });
@@ -184,11 +205,6 @@ export async function POST(request: NextRequest) {
       // assistant 메시지 영속화 + lastMessageAt 갱신
       let assistantMessageId: string | undefined;
       try {
-        const [minjiAgent] = await db
-          .select({ id: agents.id })
-          .from(agents)
-          .where(eq(agents.englishName, "minji"))
-          .limit(1);
         const fallback = isError
           ? `(에러: ${errorMessage ?? "unknown"})`
           : "(빈 응답)";
@@ -198,7 +214,7 @@ export async function POST(request: NextRequest) {
             sessionId: sId,
             role: "assistant",
             content: assistantText || fallback,
-            agentId: minjiAgent?.id ?? null,
+            agentId: selectedAgent?.id ?? null,
           })
           .returning({ id: chatMessages.id });
         assistantMessageId = assistantMsg.id;

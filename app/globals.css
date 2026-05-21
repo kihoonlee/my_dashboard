@@ -40,16 +40,12 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --color-agent-hyewon: var(--agent-hyewon);
-  --color-agent-hayoung: var(--agent-hayoung);
-  --color-agent-soomin: var(--agent-soomin);
-  --color-agent-seoyeon: var(--agent-seoyeon);
-  --color-agent-dasom: var(--agent-dasom);
-  --color-agent-hyunju: var(--agent-hyunju);
-  --color-agent-doyeon: var(--agent-doyeon);
-  --color-agent-minyoung: var(--agent-minyoung);
-  --color-agent-jeongyeon: var(--agent-jeongyeon);
-  --color-agent-minji: var(--agent-minji);
+  --color-agent-main: var(--agent-main);
+  --color-agent-assistant: var(--agent-assistant);
+  --color-agent-daily: var(--agent-daily);
+  --color-agent-diary: var(--agent-diary);
+  --color-agent-memo: var(--agent-memo);
+  --color-agent-calendar: var(--agent-calendar);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -100,17 +96,13 @@
   --sidebar-border: #e5e8eb;
   --sidebar-ring: #3182f6;
 
-  /* AI Agent colors (10 agents) */
-  --agent-hyewon: #3182f6;
-  --agent-hayoung: #00c896;
-  --agent-soomin: #ff8a3d;
-  --agent-seoyeon: #845ef7;
-  --agent-dasom: #ff6b9d;
-  --agent-hyunju: #1b64da;
-  --agent-doyeon: #495057;
-  --agent-minyoung: #f59f00;
-  --agent-jeongyeon: #20c997;
-  --agent-minji: #5c7cfa;
+  /* AI Agent colors (v2 — 6 agents) */
+  --agent-main: #3182f6;
+  --agent-assistant: #9333ea;
+  --agent-daily: #0ea5e9;
+  --agent-diary: #f97316;
+  --agent-memo: #10b981;
+  --agent-calendar: #eab308;
 }
 
 .dark {

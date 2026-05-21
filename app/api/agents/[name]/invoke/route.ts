@@ -1,16 +1,16 @@
-// 통일 Agent invoke 라우트.
+// 통일 Agent invoke 라우트 (v2 — 6명 에이전트).
 // POST /api/agents/[name]/invoke
 // body: { message: string, trigger?: string }
 //
 // 두 응답 모드:
-//   - 기본 JSON (기존): 전체 응답 1번에 반환. 내부 호출(ask_agent), 백그라운드 작업용.
+//   - 기본 JSON: 전체 응답 1번에 반환. 내부 호출(ask_agent), 백그라운드 작업용.
 //   - SSE (Accept: text/event-stream): 토큰 단위로 스트리밍. UI 채팅용.
-//     이벤트 종류 — iteration / delta / tool_call / tool_result / done / error
+//     이벤트 — iteration / delta / tool_call / tool_result / done / error
 //
-// 흐름은 동일:
+// 흐름:
 // 1. agents 테이블에서 englishName으로 agent config 조회
 // 2. lib/agents/guard.ts checkBeforeInvoke (활성/비용 한도)
-// 3. tool defs는 agent별 매핑 (Phase 1: 하영만 도메인 tool, Phase 2부터 ask_agent)
+// 3. tool defs는 agent별 매핑 + ask_agent (call_agents 권한 있으면 동적 추가)
 // 4. lib/anthropic/client.ts invokeAgent / streamAgent — prompt caching 적용
 // 5. tool_use 발생 시 max_iterations=5 루프 (동일 도구·동일 인자 2회면 중단)
 // 6. agent_logs.insert (input/output tokens, cost, duration, error)
@@ -19,7 +19,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import type Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db/client";
-import { agents, agentLogs } from "@/lib/db/schema";
+import { agents, agentLogs, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import {
   invokeAgent,
@@ -28,19 +28,26 @@ import {
 } from "@/lib/anthropic/client";
 import { calculateCostUsd } from "@/lib/anthropic/pricing";
 import { checkAfterInvoke, checkBeforeInvoke } from "@/lib/agents/guard";
-import { HAYOUNG_TOOLS, runHayoungTool } from "@/lib/agents/tools/hayoung";
-import { SEOYEON_TOOLS, runSeoyeonTool } from "@/lib/agents/tools/seoyeon";
-import { HYUNJU_TOOLS, runHyunjuTool } from "@/lib/agents/tools/hyunju";
-import { MINYOUNG_TOOLS, runMinyoungTool } from "@/lib/agents/tools/minyoung";
-import { SOOMIN_TOOLS, runSoominTool } from "@/lib/agents/tools/soomin";
-import { DASOM_TOOLS, runDasomTool } from "@/lib/agents/tools/dasom";
-import { DOYEON_TOOLS, runDoyeonTool } from "@/lib/agents/tools/doyeon";
 import { makeAskAgentTool, runAskAgent } from "@/lib/agents/tools/shared";
+import { mainTools, runMainTool } from "@/lib/agents/tools/main";
+import {
+  assistantTools,
+  runAssistantTool,
+} from "@/lib/agents/tools/assistant";
+import { dailyTools, runDailyTool } from "@/lib/agents/tools/daily";
+import { diaryTools, runDiaryTool } from "@/lib/agents/tools/diary";
+import { memoTools, runMemoTool } from "@/lib/agents/tools/memo";
+import { calendarTools, runCalendarTool } from "@/lib/agents/tools/calendar";
 import { rateLimit, rateLimitGc } from "@/lib/rate-limit";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
+import { ensureUser } from "@/lib/users/ensure";
 
 const MAX_ITERATIONS = 5;
 const MAX_AGENT_DEPTH = 2;
 const DEPTH_HEADER = "x-myhub-agent-depth";
+const INTERNAL_HEADER = "x-myhub-internal-call";
+const USER_HEADER = "x-myhub-user-id";
 
 type AgentRow = typeof agents.$inferSelect;
 type ToolPerms = {
@@ -64,6 +71,7 @@ function getAgentTools(
   englishName: string,
   permissions: ToolPerms,
   callerDepth: number,
+  userId: string,
 ): {
   tools: AgentTool[];
   runTool: (name: string, input: Record<string, unknown>) => Promise<ToolResult>;
@@ -76,27 +84,25 @@ function getAgentTools(
     ok: false,
     error: `agent ${englishName} has no domain tools`,
   });
-  if (englishName === "hayoung") {
-    domainTools = HAYOUNG_TOOLS;
-    runDomainTool = runHayoungTool;
-  } else if (englishName === "seoyeon") {
-    domainTools = SEOYEON_TOOLS;
-    runDomainTool = runSeoyeonTool;
-  } else if (englishName === "hyunju") {
-    domainTools = HYUNJU_TOOLS;
-    runDomainTool = runHyunjuTool;
-  } else if (englishName === "minyoung") {
-    domainTools = MINYOUNG_TOOLS;
-    runDomainTool = runMinyoungTool;
-  } else if (englishName === "soomin") {
-    domainTools = SOOMIN_TOOLS;
-    runDomainTool = runSoominTool;
-  } else if (englishName === "dasom") {
-    domainTools = DASOM_TOOLS;
-    runDomainTool = runDasomTool;
-  } else if (englishName === "doyeon") {
-    domainTools = DOYEON_TOOLS;
-    runDomainTool = runDoyeonTool;
+
+  if (englishName === "main") {
+    domainTools = mainTools;
+    runDomainTool = (n, i) => runMainTool(n, userId, i);
+  } else if (englishName === "assistant") {
+    domainTools = assistantTools;
+    runDomainTool = (n, i) => runAssistantTool(n, userId, i);
+  } else if (englishName === "daily") {
+    domainTools = dailyTools;
+    runDomainTool = (n, i) => runDailyTool(n, userId, i);
+  } else if (englishName === "diary") {
+    domainTools = diaryTools;
+    runDomainTool = (n, i) => runDiaryTool(n, userId, i);
+  } else if (englishName === "memo") {
+    domainTools = memoTools;
+    runDomainTool = (n, i) => runMemoTool(n, userId, i);
+  } else if (englishName === "calendar") {
+    domainTools = calendarTools;
+    runDomainTool = (n, i) => runCalendarTool(n, userId, i);
   }
 
   const callAgents = permissions.call_agents ?? [];
@@ -109,7 +115,7 @@ function getAgentTools(
     input: Record<string, unknown>,
   ): Promise<ToolResult> => {
     if (name === "ask_agent") {
-      return await runAskAgent(englishName, callerDepth, input);
+      return await runAskAgent(englishName, callerDepth, userId, input);
     }
     return await runDomainTool(name, input);
   };
@@ -117,10 +123,10 @@ function getAgentTools(
   return { tools, runTool };
 }
 
-function renderSystemPrompt(template: string): string {
+function renderSystemPrompt(template: string, userName: string): string {
   const now = new Date();
   return template
-    .replace(/\{user_name\}/g, "지훈")
+    .replace(/\{user_name\}/g, userName)
     .replace(
       /\{current_time\}/g,
       now.toLocaleString("ko-KR", { timeZone: "Asia/Seoul" }),
@@ -160,8 +166,40 @@ async function logAgentResult(
   return logRow?.id;
 }
 
+async function resolveUserId(request: NextRequest): Promise<string | null> {
+  const isInternal = request.headers.get(INTERNAL_HEADER) === "1";
+  if (isInternal) {
+    const headerUserId = request.headers.get(USER_HEADER);
+    if (headerUserId) return headerUserId;
+    // 내부 호출인데 user-id 헤더가 없으면 단일 사용자 fallback — DB에서 첫 user.
+    const [row] = await db.select({ id: users.id }).from(users).limit(1);
+    return row?.id ?? null;
+  }
+  // 외부 호출 — supabase 세션에서 사용자 식별
+  const cookieStore = await cookies();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        setAll() {
+          /* read-only context */
+        },
+      },
+    },
+  );
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+  return await ensureUser(user);
+}
+
 // ───────────────────────────────────────────────────────────
-// JSON 모드 (기존 흐름)
+// JSON 모드
 // ───────────────────────────────────────────────────────────
 async function runJsonMode(opts: {
   agent: AgentRow;
@@ -294,7 +332,7 @@ async function runJsonMode(opts: {
 }
 
 // ───────────────────────────────────────────────────────────
-// SSE 모드 (UI 채팅용 — 토큰 단위 스트리밍)
+// SSE 모드 (UI 채팅용)
 // ───────────────────────────────────────────────────────────
 function runSseMode(opts: {
   agent: AgentRow;
@@ -406,7 +444,7 @@ function runSseMode(opts: {
                 tool_use_id: tu.id,
                 content: JSON.stringify(out.result),
               });
-              emit("tool_result", { id: tu.id, ok: true });
+              emit("tool_result", { id: tu.id, ok: true, result: out.result });
             } else {
               toolResults.push({
                 type: "tool_result",
@@ -454,7 +492,6 @@ function runSseMode(opts: {
           isError,
         });
       } catch (e) {
-        // 로그 실패는 사용자에게 표시 안 함 (이미 텍스트 응답은 성공)
         console.error("agent_logs insert failed:", e);
         emit("done", {
           fullText,
@@ -475,7 +512,6 @@ function runSseMode(opts: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",
-      // proxy/CDN 버퍼 방지 (turbopack dev 환경에서도 무해)
       "X-Accel-Buffering": "no",
     },
   });
@@ -499,9 +535,7 @@ export async function POST(
     );
   }
 
-  // Rate limit — agent별 (외부 호출만, 내부 ask_agent는 우회).
-  // 1인용 가정이지만 실수성 무한 호출 방어.
-  const isInternal = request.headers.get("x-myhub-internal-call") === "1";
+  const isInternal = request.headers.get(INTERNAL_HEADER) === "1";
   if (!isInternal) {
     rateLimitGc();
     const limit = rateLimit("agent-invoke", name, {
@@ -540,6 +574,11 @@ export async function POST(
   }
   const trigger = body.trigger ?? "manual";
 
+  const userId = await resolveUserId(request);
+  if (!userId) {
+    return NextResponse.json({ error: "user_not_found" }, { status: 401 });
+  }
+
   const [agent] = (await db
     .select()
     .from(agents)
@@ -561,11 +600,19 @@ export async function POST(
     name,
     (agent.toolPermissions as ToolPerms) ?? {},
     depth,
+    userId,
   );
-  const systemPrompt = renderSystemPrompt(agent.systemPrompt);
 
-  // SSE는 호출자가 Accept 헤더로 명시적 opt-in. ask_agent의 server-to-server fetch는
-  // Accept 헤더를 보내지 않아 자동으로 JSON 모드. /api/chat은 SSE 모드 활성화.
+  const [user] = await db
+    .select({ name: users.name })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  const systemPrompt = renderSystemPrompt(
+    agent.systemPrompt,
+    user?.name ?? "사용자",
+  );
+
   const wantsSse =
     request.headers.get("accept")?.includes("text/event-stream") ?? false;
 

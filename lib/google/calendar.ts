@@ -175,3 +175,78 @@ export async function listCalendars(params: {
     (c) => c.deleted !== true && c.hidden !== true && c.selected !== false,
   );
 }
+
+/**
+ * Google Calendar에 이벤트 생성. calendarId 기본값은 "primary".
+ * rrule(예: "RRULE:FREQ=MONTHLY;BYMONTHDAY=1")을 넘기면 반복 이벤트로 등록.
+ * timeZone 미지정 시 KST(Asia/Seoul).
+ */
+export async function createCalendarEvent(params: {
+  accessToken: string;
+  calendarId?: string;
+  title: string;
+  startAt: Date;
+  endAt: Date;
+  description?: string;
+  location?: string;
+  rrule?: string;
+  timeZone?: string;
+}): Promise<GoogleCalendarEvent> {
+  const calendarId = params.calendarId ?? "primary";
+  const url = `${CALENDAR_BASE}/calendars/${encodeURIComponent(
+    calendarId,
+  )}/events`;
+  const tz = params.timeZone ?? "Asia/Seoul";
+  const body: Record<string, unknown> = {
+    summary: params.title,
+    description: params.description,
+    location: params.location,
+    start: { dateTime: params.startAt.toISOString(), timeZone: tz },
+    end: { dateTime: params.endAt.toISOString(), timeZone: tz },
+  };
+  if (params.rrule) {
+    const rule = params.rrule.startsWith("RRULE:")
+      ? params.rrule
+      : `RRULE:${params.rrule}`;
+    body.recurrence = [rule];
+  }
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${params.accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new GoogleAuthError(
+      `Calendar events.insert 실패 (${res.status}): ${text.slice(0, 200)}`,
+    );
+  }
+  return (await res.json()) as GoogleCalendarEvent;
+}
+
+/**
+ * Google Calendar 이벤트 삭제.
+ */
+export async function deleteCalendarEvent(params: {
+  accessToken: string;
+  calendarId?: string;
+  googleEventId: string;
+}): Promise<void> {
+  const calendarId = params.calendarId ?? "primary";
+  const url = `${CALENDAR_BASE}/calendars/${encodeURIComponent(
+    calendarId,
+  )}/events/${encodeURIComponent(params.googleEventId)}`;
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: { Authorization: `Bearer ${params.accessToken}` },
+  });
+  if (!res.ok && res.status !== 410) {
+    const text = await res.text().catch(() => "");
+    throw new GoogleAuthError(
+      `Calendar events.delete 실패 (${res.status}): ${text.slice(0, 200)}`,
+    );
+  }
+}

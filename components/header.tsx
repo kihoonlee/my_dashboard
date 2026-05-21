@@ -7,6 +7,7 @@ import { Menu, Search } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { useCommandPalette } from "@/components/command-palette";
 import { useSidebar } from "@/components/sidebar";
+import { NotificationBell } from "@/components/notification-bell";
 
 export function Header() {
   const { open: openPalette } = useCommandPalette();
@@ -38,6 +39,7 @@ export function Header() {
       </button>
 
       <div className="flex items-center gap-1 ml-auto">
+        <NotificationBell />
         <ThemeToggle />
       </div>
     </header>

@@ -8,13 +8,12 @@ import {
   jsonb,
   decimal,
   date,
-  vector,
   unique,
   index,
 } from "drizzle-orm/pg-core";
 
 // ============================================================
-// USERS
+// USERS & AUTH
 // ============================================================
 export const users = pgTable("users", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -26,8 +25,8 @@ export const users = pgTable("users", {
     .notNull(),
 });
 
-// OAuth provider별 refresh token 저장. encryptedRefreshToken은 pgcrypto
-// pgp_sym_encrypt 결과를 base64 인코딩해 text로 보관 — 평문 저장 금지.
+// OAuth provider별 refresh token. encryptedRefreshToken은 pgcrypto
+// pgp_sym_encrypt 결과를 base64로 보관 — 평문 저장 금지.
 export const oauthTokens = pgTable(
   "oauth_tokens",
   {
@@ -53,8 +52,7 @@ export const oauthTokens = pgTable(
 );
 
 // 사용자가 설정 UI에서 입력한 API 키. provider별 1개. encryptedValue는 oauth_tokens와
-// 같은 방식 — pgp_sym_encrypt(value, OAUTH_TOKEN_KEY) → base64. maskedTail은 마지막 4자
-// (UI 표시용 평문 안전). verifiedAt은 마지막 검증 성공 시각 (저장은 검증 통과 후만).
+// 같은 방식 — pgp_sym_encrypt(value, OAUTH_TOKEN_KEY) → base64.
 export const apiKeys = pgTable(
   "api_keys",
   {
@@ -146,12 +144,18 @@ export const agentPromptVersions = pgTable(
   ],
 );
 
+// chat_sessions.agentId nullable: null이면 멀티 채팅(메인), 값이 있으면 그 에이전트와 1:1.
 export const chatSessions = pgTable("chat_sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
+  agentId: uuid("agent_id").references(() => agents.id, {
+    onDelete: "set null",
+  }),
   title: text("title"),
+  // 사이드패널처럼 사용자에게 직접 노출 안 되는 임시 세션이면 true.
+  hidden: boolean("hidden").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -207,57 +211,113 @@ export const agentLogs = pgTable(
 );
 
 // ============================================================
-// TODO & CALENDAR
+// DIARY — 하루 1개 일기 (entry_date unique). 이미지는 별도 테이블.
 // ============================================================
-export const products = pgTable(
-  "products",
+export const diaryEntries = pgTable(
+  "diary_entries",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    name: text("name").notNull(),
-    slug: text("slug").notNull().unique(),
-    status: text("status").notNull().default("idea"),
-    description: text("description"),
-    githubRepo: text("github_repo"),
-    iconEmoji: text("icon_emoji"),
-    colorHex: text("color_hex"),
-    notes: text("notes"),
-    metricsJson: jsonb("metrics_json").default({}).notNull(),
-    lastCommitAt: timestamp("last_commit_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (t) => [index("products_status_idx").on(t.status)],
-);
-
-export const todos = pgTable(
-  "todos",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    title: text("title").notNull(),
-    description: text("description"),
-    dueDate: date("due_date"),
-    priority: text("priority").notNull().default("P2"),
-    status: text("status").notNull().default("todo"),
-    projectId: uuid("project_id").references(() => products.id, {
-      onDelete: "set null",
-    }),
-    isRecurring: boolean("is_recurring").notNull().default(false),
-    recurrenceRule: text("recurrence_rule"),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    entryDate: date("entry_date").notNull(),
+    title: text("title"),
+    bodyMd: text("body_md").notNull().default(""),
+    mood: text("mood"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
-    completedAt: timestamp("completed_at", { withTimezone: true }),
   },
   (t) => [
-    index("todos_status_due_idx").on(t.status, t.dueDate),
-    index("todos_project_idx").on(t.projectId),
+    unique("diary_entries_user_date_unique").on(t.userId, t.entryDate),
+    index("diary_entries_user_date_idx").on(t.userId, t.entryDate),
   ],
 );
 
+// Supabase Storage bucket "diary" 안의 path. signed URL로 client 업로드.
+export const diaryImages = pgTable(
+  "diary_images",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    entryId: uuid("entry_id")
+      .notNull()
+      .references(() => diaryEntries.id, { onDelete: "cascade" }),
+    storagePath: text("storage_path").notNull(),
+    caption: text("caption"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [index("diary_images_entry_idx").on(t.entryId, t.sortOrder)],
+);
+
+// ============================================================
+// MEMO — 날짜별, 하루 여러 개 가능. body_md에 마크다운 직접 저장.
+// ============================================================
+export const memos = pgTable(
+  "memos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    entryDate: date("entry_date").notNull(),
+    title: text("title"),
+    bodyMd: text("body_md").notNull().default(""),
+    pinned: boolean("pinned").notNull().default(false),
+    archived: boolean("archived").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("memos_user_date_idx").on(t.userId, t.entryDate),
+    index("memos_user_archived_idx").on(t.userId, t.archived),
+  ],
+);
+
+// ============================================================
+// TODO — 중요 / 기한 / 프로젝트 태그 / 보관 / 삭제.
+// 반복 규칙은 v2에서 out of scope, due_date만.
+// ============================================================
+export const todos = pgTable(
+  "todos",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    notes: text("notes"),
+    dueDate: date("due_date"),
+    isImportant: boolean("is_important").notNull().default(false),
+    tag: text("tag"),
+    archived: boolean("archived").notNull().default(false),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index("todos_user_due_idx").on(t.userId, t.dueDate),
+    index("todos_user_archived_idx").on(t.userId, t.archived),
+    index("todos_user_completed_idx").on(t.userId, t.completedAt),
+  ],
+);
+
+// ============================================================
+// CALENDAR — Google Calendar 동기화 캐시. v1 그대로 재사용.
+// ============================================================
 export const calendarEventsCache = pgTable(
   "calendar_events_cache",
   {
@@ -278,310 +338,101 @@ export const calendarEventsCache = pgTable(
   },
   (t) => [
     index("calendar_events_cache_start_idx").on(t.startAt),
-    unique("calendar_events_cache_cal_event_uq").on(t.calendarId, t.googleEventId),
+    unique("calendar_events_cache_cal_event_uq").on(
+      t.calendarId,
+      t.googleEventId,
+    ),
   ],
 );
 
 // ============================================================
-// GOALS & REVIEWS
+// NOTIFICATIONS — 인앱 헤더 종 배지 + 텔레그램 push 단일 소스.
+// kind: daily_report / agent_alert / discussion_result / calendar_reminder
 // ============================================================
-export const goals = pgTable("goals", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  title: text("title").notNull(),
-  description: text("description"),
-  type: text("type").notNull().default("quarter"),
-  targetDate: date("target_date"),
-  progress: integer("progress").notNull().default(0),
-  status: text("status").notNull().default("active"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
-
-export const goalLinks = pgTable("goal_links", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  goalId: uuid("goal_id")
-    .notNull()
-    .references(() => goals.id, { onDelete: "cascade" }),
-  linkedType: text("linked_type").notNull(),
-  linkedId: text("linked_id").notNull(),
-});
-
-export const weeklyReviews = pgTable("weekly_reviews", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  weekStart: date("week_start").notNull().unique(),
-  todosCompleted: integer("todos_completed").notNull().default(0),
-  habitsCompletionRate: decimal("habits_completion_rate", {
-    precision: 5,
-    scale: 2,
-  }),
-  githubCommits: integer("github_commits").notNull().default(0),
-  obsidianNotesCreated: integer("obsidian_notes_created").notNull().default(0),
-  aiSummary: text("ai_summary"),
-  aiSuggestions: jsonb("ai_suggestions").default([]).notNull(),
-  userNotes: text("user_notes"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
-
-// ============================================================
-// HABITS & YEAR IN PIXELS
-// ============================================================
-export const habits = pgTable("habits", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  description: text("description"),
-  targetFrequency: text("target_frequency").notNull().default("daily"),
-  colorHex: text("color_hex"),
-  archived: boolean("archived").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
-
-export const habitLogs = pgTable(
-  "habit_logs",
+export const notifications = pgTable(
+  "notifications",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    habitId: uuid("habit_id")
+    userId: uuid("user_id")
       .notNull()
-      .references(() => habits.id, { onDelete: "cascade" }),
-    date: date("date").notNull(),
-    completed: boolean("completed").notNull().default(false),
-    note: text("note"),
-  },
-  (t) => [unique("habit_logs_habit_date_unique").on(t.habitId, t.date)],
-);
-
-// year_pixels (mood heatmap) 테이블 제거됨 — 2026-05-10 무드 히트맵 기능 폐기.
-
-// ============================================================
-// KNOWLEDGE
-// ============================================================
-export const quickCaptures = pgTable("quick_captures", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  content: text("content").notNull(),
-  type: text("type").notNull().default("text"),
-  url: text("url"),
-  imageUrl: text("image_url"),
-  aiCategory: text("ai_category"),
-  processed: boolean("processed").notNull().default(false),
-  movedToTable: text("moved_to_table"),
-  movedToId: uuid("moved_to_id"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
-
-export const readLater = pgTable("read_later", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  url: text("url").notNull(),
-  title: text("title"),
-  domain: text("domain"),
-  thumbnailUrl: text("thumbnail_url"),
-  content: text("content"),
-  aiSummary: text("ai_summary"),
-  estimatedMinutes: integer("estimated_minutes"),
-  status: text("status").notNull().default("unread"),
-  priority: text("priority").notNull().default("medium"),
-  tags: jsonb("tags").default([]).notNull(),
-  savedAt: timestamp("saved_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-  readAt: timestamp("read_at", { withTimezone: true }),
-});
-
-export const learnings = pgTable("learnings", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  content: text("content").notNull(),
-  tags: jsonb("tags").default([]).notNull(),
-  source: text("source"),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
-
-export const obsidianNotes = pgTable(
-  "obsidian_notes",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    filePath: text("file_path").notNull().unique(),
-    title: text("title").notNull(),
-    content: text("content").notNull(),
-    tags: jsonb("tags").default([]).notNull(),
-    embedding: vector("embedding", { dimensions: 1024 }),
-    wordCount: integer("word_count").notNull().default(0),
-    lastModified: timestamp("last_modified", { withTimezone: true }),
-    syncedAt: timestamp("synced_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
-  },
-  (t) => [
-    index("obsidian_notes_embedding_idx").using(
-      "hnsw",
-      t.embedding.op("vector_cosine_ops"),
-    ),
-  ],
-);
-
-// ============================================================
-// BUSINESS — GitHub
-// ============================================================
-export const githubActivity = pgTable(
-  "github_activity",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    productId: uuid("product_id").references(() => products.id, {
-      onDelete: "cascade",
-    }),
-    type: text("type").notNull(),
-    githubId: text("github_id").notNull(),
-    title: text("title"),
-    url: text("url"),
-    aiSummary: text("ai_summary"),
-    rawJson: jsonb("raw_json").default({}).notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
-  },
-  (t) => [
-    index("github_activity_product_created_idx").on(
-      t.productId,
-      t.createdAt,
-    ),
-    unique("github_activity_type_github_id_unique").on(t.type, t.githubId),
-  ],
-);
-
-// product 단위/전체 헤드라인 단위로 LLM이 생성한 요약. 같은 period(시작 시각) 재계산은 update.
-// productId IS NULL → kind='headline' (전체 종합).
-export const githubDigests = pgTable(
-  "github_digests",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    productId: uuid("product_id").references(() => products.id, {
-      onDelete: "cascade",
-    }),
+      .references(() => users.id, { onDelete: "cascade" }),
     kind: text("kind").notNull(),
-    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
-    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
-    summary: text("summary").notNull(),
-    activityCount: integer("activity_count").notNull().default(0),
-    model: text("model").notNull(),
-    costUsd: decimal("cost_usd", { precision: 10, scale: 6 })
-      .notNull()
-      .default("0"),
+    title: text("title").notNull(),
+    bodyMd: text("body_md").notNull().default(""),
+    payloadJson: jsonb("payload_json").default({}).notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
   (t) => [
-    index("github_digests_kind_period_idx").on(t.kind, t.periodStart),
-    unique("github_digests_unique").on(t.productId, t.kind, t.periodStart),
+    index("notifications_user_created_idx").on(t.userId, t.createdAt),
+    index("notifications_user_unread_idx").on(t.userId, t.readAt),
   ],
 );
 
 // ============================================================
-// DEV TOOLS — Claude Skills
+// DISCUSSIONS — 메인 에이전트가 진행하는 다중 에이전트 토론.
+// 사용자에게 과정은 보여주지 않고 결과 리포트(summary_md)만 노출,
+// 상세 페이지에서 discussion_turns 전체 텍스트 열람 가능.
+// status: running / done / failed
 // ============================================================
-export const claudeSkills = pgTable("claude_skills", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  description: text("description"),
-  scope: text("scope").notNull().default("global"),
-  projectPath: text("project_path"),
-  category: text("category"),
-  version: text("version"),
-  filePath: text("file_path"),
-  fileContent: text("file_content"),
-  usageCount: integer("usage_count").notNull().default(0),
-  lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
-  tags: jsonb("tags").default([]).notNull(),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
-
-export const skillUsageLogs = pgTable("skill_usage_logs", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  skillId: uuid("skill_id")
-    .notNull()
-    .references(() => claudeSkills.id, { onDelete: "cascade" }),
-  context: text("context"),
-  usedAt: timestamp("used_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
-
-// ============================================================
-// NEWS
-// ============================================================
-export const newsSources = pgTable("news_sources", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  name: text("name").notNull(),
-  type: text("type").notNull(),
-  url: text("url").notNull(),
-  category: text("category"),
-  active: boolean("active").notNull().default(true),
-  fetchFrequencyMin: integer("fetch_frequency_min").notNull().default(60),
-  lastFetchedAt: timestamp("last_fetched_at", { withTimezone: true }),
-});
-
-export const newsItems = pgTable(
-  "news_items",
+export const discussions = pgTable(
+  "discussions",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    sourceId: uuid("source_id")
+    userId: uuid("user_id")
       .notNull()
-      .references(() => newsSources.id, { onDelete: "cascade" }),
-    title: text("title").notNull(),
-    url: text("url").notNull(),
-    content: text("content"),
-    aiSummary: text("ai_summary"),
-    category: text("category"),
-    publishedAt: timestamp("published_at", { withTimezone: true }),
-    fetchedAt: timestamp("fetched_at", { withTimezone: true })
+      .references(() => users.id, { onDelete: "cascade" }),
+    topic: text("topic").notNull(),
+    targetAgents: jsonb("target_agents").default([]).notNull(),
+    status: text("status").notNull().default("running"),
+    summaryMd: text("summary_md"),
+    tokenBudgetUsd: decimal("token_budget_usd", {
+      precision: 10,
+      scale: 4,
+    })
+      .notNull()
+      .default("0.5000"),
+    totalCostUsd: decimal("total_cost_usd", {
+      precision: 10,
+      scale: 6,
+    })
+      .notNull()
+      .default("0"),
+    roundsRun: integer("rounds_run").notNull().default(0),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("discussions_user_started_idx").on(t.userId, t.startedAt),
+    index("discussions_status_idx").on(t.status),
+  ],
+);
+
+export const discussionTurns = pgTable(
+  "discussion_turns",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    discussionId: uuid("discussion_id")
+      .notNull()
+      .references(() => discussions.id, { onDelete: "cascade" }),
+    round: integer("round").notNull(),
+    speakerAgentId: uuid("speaker_agent_id")
+      .notNull()
+      .references(() => agents.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
   (t) => [
-    index("news_items_published_idx").on(t.publishedAt),
-    unique("news_items_source_url_unique").on(t.sourceId, t.url),
-  ],
-);
-
-export const dailyBriefings = pgTable("daily_briefings", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  date: date("date").notNull().unique(),
-  hyewonIntro: text("hyewon_intro"),
-  sectionsJson: jsonb("sections_json").default([]).notNull(),
-  audioUrl: text("audio_url"),
-  generatedAt: timestamp("generated_at", { withTimezone: true })
-    .defaultNow()
-    .notNull(),
-});
-
-// ============================================================
-// MAIL
-// ============================================================
-export const gmailCache = pgTable(
-  "gmail_cache",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    gmailMessageId: text("gmail_message_id").notNull().unique(),
-    threadId: text("thread_id").notNull(),
-    fromEmail: text("from_email"),
-    fromName: text("from_name"),
-    subject: text("subject"),
-    snippet: text("snippet"),
-    aiPriority: text("ai_priority"),
-    needsReply: boolean("needs_reply").notNull().default(false),
-    aiSummary: text("ai_summary"),
-    receivedAt: timestamp("received_at", { withTimezone: true }).notNull(),
-    read: boolean("read").notNull().default(false),
-    archived: boolean("archived").notNull().default(false),
-  },
-  (t) => [
-    index("gmail_cache_received_idx").on(t.receivedAt),
-    index("gmail_cache_priority_idx").on(t.aiPriority),
+    index("discussion_turns_discussion_idx").on(
+      t.discussionId,
+      t.round,
+      t.createdAt,
+    ),
   ],
 );

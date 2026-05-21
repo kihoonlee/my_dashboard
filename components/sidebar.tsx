@@ -9,12 +9,12 @@ import { usePathname } from "next/navigation";
 import {
   Home,
   CheckSquare,
-  Target,
   BookOpen,
-  Briefcase,
-  Wrench,
-  Newspaper,
-  Inbox,
+  StickyNote,
+  Calendar,
+  MessageCircle,
+  Users,
+  Bell,
   Bot,
   Settings,
   X,
@@ -29,16 +29,16 @@ type MenuItem = {
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { href: "/", label: "홈", icon: Home, phase: "Phase 0/2" },
-  { href: "/today", label: "오늘", icon: CheckSquare, phase: "Phase 1 (캘린더 위젯 포함)" },
-  { href: "/goals", label: "목표·회고", icon: Target, phase: "Phase 5 ✓" },
-  { href: "/capture", label: "캡처·읽을거리", icon: Inbox, phase: "다솜 ✓" },
-  { href: "/knowledge", label: "지식·옵시디언", icon: BookOpen, phase: "Phase 3 ✓" },
-  { href: "/business", label: "사업·프로덕트", icon: Briefcase, phase: "Phase 4 ✓" },
-  { href: "/dev", label: "개발 도구", icon: Wrench, phase: "도연 ✓" },
-  { href: "/news", label: "뉴스 브리핑", icon: Newspaper, phase: "Phase 5 ✓" },
-  { href: "/agents", label: "AI 팀 (10명)", icon: Bot, phase: "Phase 6 ✓" },
-  { href: "/settings", label: "설정", icon: Settings, phase: "Phase 7" },
+  { href: "/", label: "홈", icon: Home, phase: "보조 환영" },
+  { href: "/diary", label: "일기", icon: BookOpen, phase: "달이" },
+  { href: "/memos", label: "메모", icon: StickyNote, phase: "노트" },
+  { href: "/todos", label: "할일", icon: CheckSquare, phase: "Todo" },
+  { href: "/calendar", label: "캘린더", icon: Calendar, phase: "시아" },
+  { href: "/chat", label: "에이전트 대화", icon: MessageCircle, phase: "지원" },
+  { href: "/discussions", label: "토론", icon: Users, phase: "메인 진행" },
+  { href: "/notifications", label: "알림", icon: Bell, phase: "" },
+  { href: "/agents", label: "AI 팀 (6명)", icon: Bot, phase: "관리" },
+  { href: "/settings", label: "설정", icon: Settings, phase: "" },
 ];
 
 // ─────────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ export function Sidebar() {
             <span className="text-lg font-bold tracking-tight text-foreground">
               MyHub
             </span>
-            <span className="text-xs text-muted-foreground">9/10</span>
+            <span className="text-xs text-muted-foreground">v2</span>
           </Link>
           {/* 모바일 닫기 버튼 — 44px 터치 타깃 */}
           <button

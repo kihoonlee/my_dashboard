@@ -113,10 +113,15 @@ function parseToolResultContent(
     // route.ts는 JSON.stringify(out.result)로 직렬화해서 보냄. 다시 parse 시도.
     try {
       const parsed = JSON.parse(content);
-      // Gemini는 object를 기대하므로 primitive면 wrap.
-      return typeof parsed === "object" && parsed !== null
-        ? (parsed as Record<string, unknown>)
-        : { result: parsed };
+      // Gemini의 functionResponse.response는 JSON object여야 함 (proto repeating 필드 아님).
+      // - primitive(string/number/boolean/null) → { result }
+      // - array → { items } (Gemini가 list 받으면 INVALID_ARGUMENT)
+      // - object → 그대로
+      if (Array.isArray(parsed)) return { items: parsed };
+      if (parsed === null || typeof parsed !== "object") {
+        return { result: parsed };
+      }
+      return parsed as Record<string, unknown>;
     } catch {
       return { result: content };
     }
