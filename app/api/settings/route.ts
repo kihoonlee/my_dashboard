@@ -1,11 +1,11 @@
 // GET   /api/settings — 사용자 프로필 + 외부 연동 상태 + 마지막 동기화 메타.
-// PATCH /api/settings — 화이트리스트 필드(name, settings_json.preferences) 갱신.
+// PATCH /api/settings — name 필드만 갱신 (v2).
 //
-// `settings_json`에는 동기화 메타(lastCalendarSync 등)와 todayInsight 캐시가 들어있다.
+// `settings_json`에는 동기화 메타(lastCalendarSync)와 todayInsight 캐시가 들어있다.
 // 통째로 노출하지 않고 UI에 필요한 부분만 형태 맞춰 반환.
 
 import { NextResponse, type NextRequest } from "next/server";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { oauthTokens, users } from "@/lib/db/schema";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -34,16 +34,11 @@ type SyncMeta = {
   [key: string]: unknown;
 };
 
-type Preferences = {
-  defaultGithubOrg?: string;
-};
+type Preferences = Record<string, never>;
 
 type StoredSettings = {
   lastCalendarSync?: SyncMeta;
-  lastObsidianSync?: SyncMeta;
-  lastGithubSync?: SyncMeta;
-  lastNewsSync?: SyncMeta;
-  lastSkillsSync?: SyncMeta;
+  // v1 잔재 (obsidian/github/news/skills sync 메타) — DB에 남아있어도 응답에 안 내려보냄.
   todayInsight?: { date?: string; oneLiner?: string } & Record<string, unknown>;
   preferences?: Preferences;
 };
@@ -118,7 +113,6 @@ export async function GET() {
     },
     integrations: {
       apiKeys: apiKeyStates,
-      obsidianVault: readEnvWithFallback("OBSIDIAN_VAULT_PATH") ?? null,
       allowedEmail: readEnvWithFallback("ALLOWED_EMAIL") ?? null,
       oauthTokens: tokenRows.map((t) => ({
         provider: t.provider,
@@ -130,10 +124,6 @@ export async function GET() {
     },
     sync: {
       calendar: settings.lastCalendarSync ?? null,
-      obsidian: settings.lastObsidianSync ?? null,
-      github: settings.lastGithubSync ?? null,
-      news: settings.lastNewsSync ?? null,
-      skills: settings.lastSkillsSync ?? null,
     },
     todayInsight: settings.todayInsight
       ? {
@@ -158,7 +148,7 @@ export async function PATCH(request: NextRequest) {
   }
   const userId = await ensureUser(user);
 
-  let body: { name?: unknown; preferences?: unknown };
+  let body: { name?: unknown };
   try {
     body = await request.json();
   } catch {
@@ -173,36 +163,11 @@ export async function PATCH(request: NextRequest) {
     update.name = null;
   }
 
-  let nextPreferences: Preferences | null = null;
-  if (body.preferences && typeof body.preferences === "object") {
-    const p = body.preferences as Record<string, unknown>;
-    const out: Preferences = {};
-    if (typeof p.defaultGithubOrg === "string") {
-      out.defaultGithubOrg = p.defaultGithubOrg.trim().slice(0, 80);
-    }
-    nextPreferences = out;
-  }
-
-  if (Object.keys(update).length === 0 && nextPreferences === null) {
+  if (Object.keys(update).length === 0) {
     return NextResponse.json({ error: "no_fields" }, { status: 400 });
   }
 
-  if (Object.keys(update).length > 0) {
-    await db.update(users).set(update).where(eq(users.id, userId));
-  }
-
-  if (nextPreferences) {
-    const json = JSON.stringify({ preferences: nextPreferences });
-    await db
-      .update(users)
-      .set({
-        settingsJson: sql`
-          COALESCE(${users.settingsJson}, '{}'::jsonb)
-          || ${json}::jsonb
-        `,
-      })
-      .where(eq(users.id, userId));
-  }
+  await db.update(users).set(update).where(eq(users.id, userId));
 
   return NextResponse.json({ ok: true });
 }

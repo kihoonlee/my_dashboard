@@ -10,7 +10,7 @@ import type { AgentTool, InvokeAgentParams, StreamHandle } from "@/lib/llm/route
  * Anthropic 클라이언트 — 매 호출마다 생성 (키 회전 즉시 반영, SDK 객체 lightweight).
  * 키 해소 우선순위: api_keys 테이블 → process.env / .env.local → throw.
  */
-async function getAnthropicClient(): Promise<Anthropic> {
+export async function getAnthropicClient(): Promise<Anthropic> {
   const apiKey = await resolveApiKey("anthropic");
   if (!apiKey) {
     throw new Error(

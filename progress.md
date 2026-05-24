@@ -881,6 +881,40 @@ Phase 2B/3/4-2/5/6/7 모두 코드 완료. 활성 Agent 9/10. 1차 완료 체크
 
 ---
 
+### Owllet 스타일 v2 UI 리디자인 — ✅ 완료 (2026-05-24)
+
+브랜치 `version-2-iridescent-oasis`. 사용자 검증 후 main 머지 예정.
+
+**디자인 토큰** (`app/globals.css`)
+- Toss Blue + Flowto.ai 팔레트 → **검은색 primary** (`#1a1a1a`) + 옅은 그레이 muted/border.
+- 파스텔 칩 6종 추가: `--pastel-cream/peach/sky/mint/lilac/blush` + dark 톤 동일.
+- chart-1~5도 monochrome+파스텔로 재배정.
+- agent 컬러 6종 v2 재매핑 (main=Toss Blue 유지, assistant=`#5C7CFA`, daily=`#00C896`, diary=`#845EF7`, memo=`#FF6B9D`, calendar=`#FF8A3D`).
+
+**컴포넌트**
+- `components/sidebar.tsx` — 64px → 72px narrow icon sidebar, 아이콘 + 짧은 라벨 세로 chip, 활성은 `bg-foreground text-background` (검은 chip). + 새 대화 / footer는 팀·설정. 로그아웃은 sidebar에서 빠지고 ⌘K 명령 팔레트로.
+- `components/home-hero.tsx` — 큰 민지 아바타(`size="xl"` = 128px) + Owllet "무엇을 도와드릴까요?" 큰 인사 + 제안 chip 4개 + "민지에게 인사 받기" CTA.
+- `app/(app)/page.tsx` — 6명 에이전트 카드 그리드 (Owllet "추천 AI" 스타일). 각 카드에 아바타·설명·태그·옵션 뱃지(파스텔 톤). 클릭 시 `/chat?agent=<id>`.
+- `app/(app)/chat/page.tsx` — 3-pane 레이아웃. 좌측 lg≥ second-column(72w, 검색·에이전트 selector·새 대화·세션 placeholder), 메인 빈 상태에 큰 아바타+제안 chip, 하단 둥근 카드 입력박스(첨부·텍스트·send 원형). user 버블 검은 배경.
+- `components/agent-sidepanel.tsx` — 둥근 input + 검은 send chip, user 버블 검은색.
+- `components/ui/button.tsx` — `rounded-lg` → `rounded-full` (pill) 기본, icon size는 `rounded-2xl`.
+- `components/agent-badge.tsx` — `AGENT_PROFILE_IMAGES` 자동 매핑 (`public/agents/<englishName>.png`) + `KOREAN_NAMES` v2 갱신.
+
+**한국어 이름 v1 → v2 백엔드 일관**
+- `lib/agents/definitions.ts`: name + systemPrompt 내부 옛 이름(태오/새벽/달이/노트/시아) 전부 갱신. colorHex도 v2 매핑.
+- `lib/agents/tools/shared.ts`: `ask_agent` 옵션 라벨 v2.
+- `lib/agents/tools/*.ts`: 헤더 주석 6개 v2.
+- `lib/discussions/runner.ts`: 토론 진행자 system prompt "지원" → "혜원".
+- `components/command-palette.tsx`, `components/floating-chat-button.tsx`: 라벨 v2.
+- `app/(app)/*` 5개 페이지(diary/memos/calendar/discussions/...): 사이드패널 displayName + 페이지 카피 v2.
+
+**검증** — `npm run build` ✓ (1.7s 컴파일 + 31 static page) / `npm run lint` ✓ (0 errors).
+
+**다음 dev 사이클 필수**
+- `npm run supabase:start && npm run db:seed` — definitions.ts의 name/colorHex 변경이 DB로 반영되어야 `/agents` 페이지에서 v2 이름 표시.
+
+---
+
 ### 옛 메모 (Phase 2B 진입 시점 — 보존용 참고)
 
 ```

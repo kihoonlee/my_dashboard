@@ -4,30 +4,25 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
+// v2 — v1 캐릭터를 v2 역할에 매핑:
+//   main=혜원 · assistant=민지 · daily=하영 · diary=서연 · memo=다솜 · calendar=수민
+// 이미지 파일은 v1 파일명 그대로 사용 (rename 비용 회피).
 const KOREAN_NAMES: Record<string, string> = {
-  hyewon: "혜원",
-  hayoung: "하영",
-  soomin: "수민",
-  seoyeon: "서연",
-  dasom: "다솜",
-  hyunju: "현주",
-  doyeon: "도연",
-  minyoung: "민영",
-  jeongyeon: "정연",
-  minji: "민지",
+  main: "혜원",
+  assistant: "민지",
+  daily: "하영",
+  diary: "서연",
+  memo: "다솜",
+  calendar: "수민",
 };
 
 const AGENT_PROFILE_IMAGES: Record<string, string> = {
-  hyewon: "/agents/hyewon.png",
-  hayoung: "/agents/hayoung.png",
-  soomin: "/agents/soomin.png",
-  seoyeon: "/agents/seoyeon.png",
-  dasom: "/agents/dasom.png",
-  hyunju: "/agents/hyunju.png",
-  doyeon: "/agents/doyeon.png",
-  minyoung: "/agents/minyoung.png",
-  jeongyeon: "/agents/jeongyeon.png",
-  minji: "/agents/minji.png",
+  main: "/agents/hyewon.png",
+  assistant: "/agents/minji.png",
+  daily: "/agents/hayoung.png",
+  diary: "/agents/seoyeon.png",
+  memo: "/agents/dasom.png",
+  calendar: "/agents/soomin.png",
 };
 
 export function AgentAvatar({

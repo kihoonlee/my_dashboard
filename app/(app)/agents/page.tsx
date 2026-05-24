@@ -77,7 +77,7 @@ export default function AgentsPage() {
         <div className="flex-1">
           <h1 className="text-2xl font-bold tracking-tight">AI 팀</h1>
           <p className="text-sm text-muted-foreground">
-            10명 Agent의 상태·비용·프롬프트를 한 곳에서 관리.
+            6명 Agent의 상태·비용·프롬프트를 한 곳에서 관리.
           </p>
         </div>
       </header>
@@ -85,7 +85,7 @@ export default function AgentsPage() {
       {error && (
         <div
           role="alert"
-          className="border border-destructive/40 bg-destructive/10 text-destructive rounded-lg p-3 text-sm"
+          className="border border-destructive/30 bg-destructive/5 text-destructive rounded-2xl p-3 text-sm"
         >
           {error}
         </div>
@@ -97,7 +97,7 @@ export default function AgentsPage() {
           로딩 중...
         </div>
       ) : !agents || agents.length === 0 ? (
-        <div className="border border-dashed border-border rounded-xl p-10 text-center text-sm text-muted-foreground">
+        <div className="border border-dashed border-border rounded-3xl p-10 text-center text-sm text-muted-foreground">
           등록된 Agent가 없습니다. <code>npm run db:seed</code>를 실행하세요.
         </div>
       ) : (
@@ -123,7 +123,7 @@ function AgentCard({ a }: { a: AgentItem }) {
     <li>
       <Link
         href={`/agents/${a.englishName}`}
-        className="block rounded-xl border border-border bg-card p-4 hover:bg-card/80 transition-colors"
+        className="block rounded-2xl border border-border bg-card p-4 hover:border-foreground/20 hover:shadow-sm transition"
       >
         <header className="flex items-start gap-3">
           <AgentAvatar

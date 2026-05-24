@@ -40,16 +40,19 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --color-agent-hyewon: var(--agent-hyewon);
-  --color-agent-hayoung: var(--agent-hayoung);
-  --color-agent-soomin: var(--agent-soomin);
-  --color-agent-seoyeon: var(--agent-seoyeon);
-  --color-agent-dasom: var(--agent-dasom);
-  --color-agent-hyunju: var(--agent-hyunju);
-  --color-agent-doyeon: var(--agent-doyeon);
-  --color-agent-minyoung: var(--agent-minyoung);
-  --color-agent-jeongyeon: var(--agent-jeongyeon);
-  --color-agent-minji: var(--agent-minji);
+  --color-agent-main: var(--agent-main);
+  --color-agent-assistant: var(--agent-assistant);
+  --color-agent-daily: var(--agent-daily);
+  --color-agent-diary: var(--agent-diary);
+  --color-agent-memo: var(--agent-memo);
+  --color-agent-calendar: var(--agent-calendar);
+  /* Pastel chip backgrounds (Owllet 추천 뱃지 등) */
+  --color-pastel-cream: var(--pastel-cream);
+  --color-pastel-peach: var(--pastel-peach);
+  --color-pastel-sky: var(--pastel-sky);
+  --color-pastel-mint: var(--pastel-mint);
+  --color-pastel-lilac: var(--pastel-lilac);
+  --color-pastel-blush: var(--pastel-blush);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -60,91 +63,106 @@
 }
 
 :root {
-  /* Flowto.ai design tokens */
+  /* MyHub v2 — Owllet 스타일: 검은색 primary + 옅은 파스텔 */
   --font-sans: "Pretendard Variable", -apple-system, BlinkMacSystemFont,
     system-ui, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Monaco,
     Consolas, "Liberation Mono", "Courier New", monospace;
 
-  /* Toss Blue + Flowto.ai palette */
   --background: #ffffff;
-  --foreground: #191f28;
+  --foreground: #1a1a1a;
   --card: #ffffff;
-  --card-foreground: #191f28;
+  --card-foreground: #1a1a1a;
   --popover: #ffffff;
-  --popover-foreground: #191f28;
-  --primary: #3182f6;
+  --popover-foreground: #1a1a1a;
+  /* primary CTA = 거의 검은색 (Owllet 검은 버튼) */
+  --primary: #1a1a1a;
   --primary-foreground: #ffffff;
-  --secondary: #f2f4f6;
-  --secondary-foreground: #191f28;
-  --muted: #f2f4f6;
-  --muted-foreground: #4e5968;
-  --accent: #f2f4f6;
-  --accent-foreground: #191f28;
+  --secondary: #f5f5f5;
+  --secondary-foreground: #1a1a1a;
+  --muted: #f5f5f5;
+  --muted-foreground: #6b7280;
+  --accent: #f5f5f5;
+  --accent-foreground: #1a1a1a;
   --destructive: #ef4444;
-  --border: #e5e8eb;
-  --input: #e5e8eb;
-  --ring: #3182f6;
-  --chart-1: #3182f6;
-  --chart-2: #00c896;
-  --chart-3: #ff8a3d;
-  --chart-4: #845ef7;
-  --chart-5: #f59f00;
+  --border: #ececec;
+  --input: #ececec;
+  --ring: #1a1a1a;
+  --chart-1: #1a1a1a;
+  --chart-2: #6b7280;
+  --chart-3: #fcd34d;
+  --chart-4: #c4b5fd;
+  --chart-5: #fda4af;
+  /* 더 둥근 기본 — Owllet 카드는 rounded-2xl 이상 */
   --radius: 1rem;
-  --sidebar: #f9fafb;
-  --sidebar-foreground: #191f28;
-  --sidebar-primary: #3182f6;
+  --sidebar: #fafafa;
+  --sidebar-foreground: #1a1a1a;
+  --sidebar-primary: #1a1a1a;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f2f4f6;
-  --sidebar-accent-foreground: #191f28;
-  --sidebar-border: #e5e8eb;
-  --sidebar-ring: #3182f6;
+  --sidebar-accent: #f0f0f0;
+  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-border: #ececec;
+  --sidebar-ring: #1a1a1a;
 
-  /* AI Agent colors (10 agents) */
-  --agent-hyewon: #3182f6;
-  --agent-hayoung: #00c896;
-  --agent-soomin: #ff8a3d;
-  --agent-seoyeon: #845ef7;
-  --agent-dasom: #ff6b9d;
-  --agent-hyunju: #1b64da;
-  --agent-doyeon: #495057;
-  --agent-minyoung: #f59f00;
-  --agent-jeongyeon: #20c997;
-  --agent-minji: #5c7cfa;
+  /* 파스텔 chip 배경 (Owllet 추천 노란 뱃지 + 태그 등) */
+  --pastel-cream: #fef3c7;   /* Owllet 추천 노란 뱃지 */
+  --pastel-peach: #fed7aa;
+  --pastel-sky: #dbeafe;
+  --pastel-mint: #d1fae5;
+  --pastel-lilac: #ede9fe;
+  --pastel-blush: #fce7f3;
+
+  /* AI Agent colors — solid (badge·아바타용, v1 매핑 유지) */
+  /* main=혜원 · assistant=민지 · daily=하영 · diary=서연 · memo=다솜 · calendar=수민 */
+  --agent-main: #3182f6;
+  --agent-assistant: #5c7cfa;
+  --agent-daily: #00c896;
+  --agent-diary: #845ef7;
+  --agent-memo: #ff6b9d;
+  --agent-calendar: #ff8a3d;
 }
 
 .dark {
-  --background: #0a0e14;
-  --foreground: #f0f2f5;
-  --card: #1a1f28;
-  --card-foreground: #f0f2f5;
-  --popover: #1a1f28;
-  --popover-foreground: #f0f2f5;
-  --primary: #5c9bff;
-  --primary-foreground: #0a0e14;
-  --secondary: #131820;
-  --secondary-foreground: #f0f2f5;
-  --muted: #131820;
-  --muted-foreground: #8b95a1;
-  --accent: #131820;
-  --accent-foreground: #f0f2f5;
+  --background: #0a0a0a;
+  --foreground: #f5f5f5;
+  --card: #141414;
+  --card-foreground: #f5f5f5;
+  --popover: #141414;
+  --popover-foreground: #f5f5f5;
+  /* dark에서 primary는 흰색 CTA */
+  --primary: #f5f5f5;
+  --primary-foreground: #0a0a0a;
+  --secondary: #1a1a1a;
+  --secondary-foreground: #f5f5f5;
+  --muted: #1a1a1a;
+  --muted-foreground: #9ca3af;
+  --accent: #1a1a1a;
+  --accent-foreground: #f5f5f5;
   --destructive: #f87171;
-  --border: #2c3340;
-  --input: #2c3340;
-  --ring: #5c9bff;
-  --chart-1: #5c9bff;
-  --chart-2: #2dd4bf;
-  --chart-3: #fb923c;
-  --chart-4: #a78bfa;
-  --chart-5: #fbbf24;
-  --sidebar: #131820;
-  --sidebar-foreground: #f0f2f5;
-  --sidebar-primary: #5c9bff;
-  --sidebar-primary-foreground: #0a0e14;
-  --sidebar-accent: #1a1f28;
-  --sidebar-accent-foreground: #f0f2f5;
-  --sidebar-border: #2c3340;
-  --sidebar-ring: #5c9bff;
+  --border: #262626;
+  --input: #262626;
+  --ring: #f5f5f5;
+  --chart-1: #f5f5f5;
+  --chart-2: #9ca3af;
+  --chart-3: #fbbf24;
+  --chart-4: #c4b5fd;
+  --chart-5: #fda4af;
+  --sidebar: #0a0a0a;
+  --sidebar-foreground: #f5f5f5;
+  --sidebar-primary: #f5f5f5;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: #1a1a1a;
+  --sidebar-accent-foreground: #f5f5f5;
+  --sidebar-border: #262626;
+  --sidebar-ring: #f5f5f5;
+
+  /* 파스텔 dark 톤 (덜 채도, 더 어두운) */
+  --pastel-cream: #3f3a1f;
+  --pastel-peach: #3f2d1f;
+  --pastel-sky: #1f2a3f;
+  --pastel-mint: #1f3f2a;
+  --pastel-lilac: #2d1f3f;
+  --pastel-blush: #3f1f2d;
 }
 
 @layer base {

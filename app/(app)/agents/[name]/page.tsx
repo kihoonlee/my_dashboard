@@ -222,13 +222,13 @@ export default function AgentDetailPage() {
       {error && (
         <div
           role="alert"
-          className="border border-destructive/40 bg-destructive/10 text-destructive rounded-lg p-3 text-sm"
+          className="border border-destructive/30 bg-destructive/5 text-destructive rounded-2xl p-3 text-sm"
         >
           {error}
         </div>
       )}
       {info && (
-        <div className="border border-primary/40 bg-primary/10 text-primary rounded-lg p-3 text-sm">
+        <div className="border border-foreground/20 bg-card text-foreground rounded-2xl p-3 text-sm">
           {info}
         </div>
       )}
@@ -248,7 +248,7 @@ export default function AgentDetailPage() {
             className={cn(
               "px-3 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
               tab === key
-                ? "border-primary text-foreground"
+                ? "border-foreground text-foreground"
                 : "border-transparent text-muted-foreground hover:text-foreground",
             )}
           >
@@ -319,7 +319,7 @@ function OverviewTab({
         {recentCalls.length === 0 ? (
           <div className="text-muted-foreground">호출 기록이 없습니다.</div>
         ) : (
-          <ul className="flex flex-col divide-y divide-border border border-border rounded-lg overflow-hidden">
+          <ul className="flex flex-col divide-y divide-border border border-border rounded-2xl overflow-hidden">
             {recentCalls.slice(0, 5).map((c) => (
               <li key={c.id} className="px-3 py-2 flex items-center gap-3">
                 <span className="font-mono text-muted-foreground shrink-0 w-32">
@@ -361,7 +361,7 @@ function Stat({
   sub?: string;
 }) {
   return (
-    <div className="rounded-lg border border-border bg-card p-3">
+    <div className="rounded-2xl border border-border bg-card p-3.5">
       <div className="text-[11px] text-muted-foreground">{label}</div>
       <div className="text-lg font-semibold mt-0.5">{value}</div>
       {sub && <div className="text-[10px] font-mono text-muted-foreground/80 mt-0.5">{sub}</div>}
@@ -403,7 +403,7 @@ function PromptTab({
       <textarea
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        className="w-full min-h-[280px] rounded-lg border border-border bg-background p-3 text-sm font-mono leading-relaxed focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+        className="w-full min-h-[280px] rounded-2xl border border-border bg-background p-4 text-sm font-mono leading-relaxed focus:outline-none focus:border-foreground"
       />
       <div className="flex items-center gap-2">
         <input
@@ -412,7 +412,7 @@ function PromptTab({
           onChange={(e) => setNote(e.target.value)}
           placeholder="변경 메모 (선택)"
           disabled={!dirty || saving}
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-primary"
+          className="flex-1 rounded-full border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:border-foreground"
         />
         <Button
           onClick={async () => {
@@ -438,7 +438,7 @@ function PromptTab({
 
       <h3 className="text-sm font-medium mt-4">버전 히스토리</h3>
       {promptVersions.length === 0 ? (
-        <div className="text-xs text-muted-foreground border border-dashed border-border rounded-lg p-4 text-center">
+        <div className="text-xs text-muted-foreground border border-dashed border-border rounded-2xl p-4 text-center">
           저장된 이전 버전이 없습니다. 프롬프트를 수정해 저장하면 자동으로 archive됩니다.
         </div>
       ) : (
@@ -446,7 +446,7 @@ function PromptTab({
           {promptVersions.map((v) => (
             <li
               key={v.id}
-              className="rounded-lg border border-border bg-card overflow-hidden"
+              className="rounded-2xl border border-border bg-card overflow-hidden"
             >
               <header className="flex items-center gap-3 px-3 py-2">
                 <span className="font-mono text-xs text-muted-foreground shrink-0">
@@ -558,7 +558,7 @@ function MetaTab({
           type="text"
           value={model}
           onChange={(e) => setModel(e.target.value)}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary"
+          className="w-full rounded-2xl border border-border bg-background px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-foreground"
         />
       </Field>
 
@@ -569,7 +569,7 @@ function MetaTab({
             value={temperature}
             onChange={(e) => setTemperature(e.target.value)}
             placeholder="0.5"
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary"
+            className="w-full rounded-2xl border border-border bg-background px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-foreground"
           />
         </Field>
         <Field label="Max Tokens">
@@ -578,7 +578,7 @@ function MetaTab({
             value={maxTokens}
             onChange={(e) => setMaxTokens(e.target.value)}
             min={1}
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary"
+            className="w-full rounded-2xl border border-border bg-background px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-foreground"
           />
         </Field>
       </div>
@@ -590,7 +590,7 @@ function MetaTab({
             value={dailyLimit}
             onChange={(e) => setDailyLimit(e.target.value)}
             placeholder="1.50"
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary"
+            className="w-full rounded-2xl border border-border bg-background px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-foreground"
           />
         </Field>
         <Field label="월 비용 한도 ($)">
@@ -599,7 +599,7 @@ function MetaTab({
             value={monthlyLimit}
             onChange={(e) => setMonthlyLimit(e.target.value)}
             placeholder="45.00"
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:border-primary"
+            className="w-full rounded-2xl border border-border bg-background px-4 py-2.5 text-sm font-mono focus:outline-none focus:border-foreground"
           />
         </Field>
       </div>
@@ -609,17 +609,17 @@ function MetaTab({
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={3}
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-primary"
+          className="w-full rounded-2xl border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:border-foreground"
         />
       </Field>
 
-      <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
+      <div className="rounded-2xl border border-border bg-muted/30 p-3.5 text-xs">
         <div className="font-medium mb-1.5">트리거</div>
         <pre className="font-mono text-muted-foreground whitespace-pre-wrap break-words">
           {JSON.stringify(agent.triggerConfig, null, 2)}
         </pre>
       </div>
-      <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs">
+      <div className="rounded-2xl border border-border bg-muted/30 p-3.5 text-xs">
         <div className="font-medium mb-1.5">도구 권한</div>
         <pre className="font-mono text-muted-foreground whitespace-pre-wrap break-words">
           {JSON.stringify(agent.toolPermissions, null, 2)}
@@ -649,13 +649,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function ActivityTab({ calls }: { calls: RecentCall[] }) {
   if (calls.length === 0) {
     return (
-      <div className="text-sm text-muted-foreground border border-dashed border-border rounded-xl p-6 text-center">
+      <div className="text-sm text-muted-foreground border border-dashed border-border rounded-3xl p-6 text-center">
         호출 기록이 없습니다.
       </div>
     );
   }
   return (
-    <ul className="flex flex-col divide-y divide-border border border-border rounded-xl overflow-hidden text-xs">
+    <ul className="flex flex-col divide-y divide-border border border-border rounded-2xl overflow-hidden text-xs">
       {calls.map((c) => (
         <li
           key={c.id}

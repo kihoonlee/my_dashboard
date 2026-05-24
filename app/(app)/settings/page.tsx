@@ -11,18 +11,14 @@ import {
   AlertCircle,
   Calendar,
   CheckCircle2,
-  GitBranch,
-  Inbox,
   Key,
   Loader2,
-  Newspaper,
   RefreshCw,
   Save,
   Settings as SettingsIcon,
   Sun,
   Moon,
   User,
-  Wrench,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
@@ -32,29 +28,9 @@ type SyncMeta = {
   at?: string;
   count?: number;
   upserts?: number;
-  upserted?: number;
-  unchanged?: number;
-  deleted?: number;
   deletedStale?: number;
-  scanned?: number;
-  inserted?: number;
-  updated?: number;
-  removed?: number;
-  errors?: string[];
-  // calendar
   calendarsSynced?: number;
-  // github
-  org?: string;
-  repos?: number;
-  activeRepos?: number;
-  staleRepos?: number;
-  archivedRepos?: number;
-  newActivities?: number;
-  llmCalls?: number;
-  totalCostUsd?: number;
-  // news
-  sources?: number;
-  fetchedTotal?: number;
+  errors?: string[];
 };
 
 type OauthTokenInfo = {
@@ -71,6 +47,12 @@ type ApiKeyState =
   | { source: "none" };
 
 type ApiKeyProvider = "anthropic" | "openai" | "github" | "gemini";
+// UI에 노출하는 provider — DB에 등록된 github 키는 보존하되 v2 UI에선 안 보임.
+const VISIBLE_API_KEY_PROVIDERS: ApiKeyProvider[] = [
+  "anthropic",
+  "gemini",
+  "openai",
+];
 
 type SettingsResponse = {
   profile: {
@@ -81,37 +63,23 @@ type SettingsResponse = {
   };
   integrations: {
     apiKeys: Record<ApiKeyProvider, ApiKeyState>;
-    obsidianVault: string | null;
     allowedEmail: string | null;
     oauthTokens: OauthTokenInfo[];
   };
   sync: {
     calendar: SyncMeta | null;
-    obsidian: SyncMeta | null;
-    github: SyncMeta | null;
-    news: SyncMeta | null;
-    skills: SyncMeta | null;
   };
   todayInsight: { date: string | null; oneLiner: string | null } | null;
-  preferences: { defaultGithubOrg?: string };
 };
 
-type SyncKind = "calendar" | "obsidian" | "github" | "news" | "skills";
+type SyncKind = "calendar";
 
 const SYNC_LABEL: Record<SyncKind, string> = {
   calendar: "캘린더",
-  obsidian: "옵시디언 vault",
-  github: "GitHub 활동",
-  news: "뉴스 수집",
-  skills: "Skills 카탈로그",
 };
 
 const SYNC_ICON: Record<SyncKind, React.ComponentType<{ className?: string }>> = {
   calendar: Calendar,
-  obsidian: Inbox,
-  github: GitBranch,
-  news: Newspaper,
-  skills: Wrench,
 };
 
 function formatDateTime(iso: string | null | undefined): string {
@@ -126,42 +94,17 @@ function formatDateTime(iso: string | null | undefined): string {
   });
 }
 
-function describeSync(kind: SyncKind, meta: SyncMeta | null): string {
+function describeSync(meta: SyncMeta | null): string {
   if (!meta) return "한 번도 동기화하지 않음";
-  switch (kind) {
-    case "calendar": {
-      const c = meta.count ?? meta.upserts ?? 0;
-      const stale = meta.deletedStale ?? 0;
-      const cals = meta.calendarsSynced ?? 0;
-      const calsLabel = cals > 0 ? ` · 캘린더 ${cals}개` : "";
-      return `${c}건 캐시 · 만료 정리 ${stale}${calsLabel}`;
-    }
-    case "obsidian": {
-      const up = meta.upserted ?? 0;
-      const del = meta.deleted ?? 0;
-      return `노트 upsert ${up} · 삭제 ${del} · 스캔 ${meta.scanned ?? 0}`;
-    }
-    case "github": {
-      const repos = meta.repos ?? 0;
-      const active = meta.activeRepos ?? 0;
-      const cost = meta.totalCostUsd ?? 0;
-      return `repo ${repos} (활성 ${active}) · 신규 활동 ${meta.newActivities ?? 0} · LLM $${cost.toFixed(4)}`;
-    }
-    case "news": {
-      return `소스 ${meta.sources ?? 0} · 신규 ${meta.inserted ?? 0}건`;
-    }
-    case "skills": {
-      return `스캔 ${meta.scanned ?? 0} · 신규 ${meta.inserted ?? 0} · 업데이트 ${meta.updated ?? 0} · 삭제 ${meta.removed ?? 0}`;
-    }
-  }
+  const c = meta.count ?? meta.upserts ?? 0;
+  const stale = meta.deletedStale ?? 0;
+  const cals = meta.calendarsSynced ?? 0;
+  const calsLabel = cals > 0 ? ` · 캘린더 ${cals}개` : "";
+  return `${c}건 캐시 · 만료 정리 ${stale}${calsLabel}`;
 }
 
 const SYNC_ENDPOINT: Record<SyncKind, string> = {
   calendar: "/api/sync/calendar",
-  obsidian: "/api/sync/obsidian",
-  github: "/api/sync/github",
-  news: "/api/sync/news",
-  skills: "/api/sync/skills",
 };
 
 export default function SettingsPage() {
@@ -172,7 +115,6 @@ export default function SettingsPage() {
   const [info, setInfo] = useState<string | null>(null);
 
   const [name, setName] = useState<string>("");
-  const [defaultGithubOrg, setDefaultGithubOrg] = useState<string>("");
   const [saving, setSaving] = useState<boolean>(false);
   const [syncingKind, setSyncingKind] = useState<SyncKind | null>(null);
 
@@ -186,7 +128,6 @@ export default function SettingsPage() {
       const json: SettingsResponse = await res.json();
       setData(json);
       setName(json.profile.name ?? "");
-      setDefaultGithubOrg(json.preferences.defaultGithubOrg ?? "");
     } catch (e) {
       setError(`설정 로드 실패: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -208,7 +149,6 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: name.trim() || null,
-          preferences: { defaultGithubOrg: defaultGithubOrg.trim() },
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -261,7 +201,7 @@ export default function SettingsPage() {
   if (!data) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
-        <div className="border border-destructive/40 bg-destructive/10 text-destructive rounded-lg p-3 text-sm flex items-center gap-2">
+        <div className="border border-destructive/30 bg-destructive/5 text-destructive rounded-2xl p-3 text-sm flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
           {error ?? "설정을 불러올 수 없습니다"}
         </div>
@@ -276,7 +216,7 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col gap-8 p-6 max-w-3xl mx-auto w-full">
       <header className="flex items-center gap-3">
-        <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+        <div className="size-10 rounded-2xl bg-foreground text-background flex items-center justify-center">
           <SettingsIcon className="h-5 w-5" />
         </div>
         <div className="flex-1 min-w-0">
@@ -290,14 +230,14 @@ export default function SettingsPage() {
       {error && (
         <div
           role="alert"
-          className="border border-destructive/40 bg-destructive/10 text-destructive rounded-lg p-3 text-sm flex items-start gap-2"
+          className="border border-destructive/30 bg-destructive/5 text-destructive rounded-2xl p-3 text-sm flex items-start gap-2"
         >
           <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
           <span className="flex-1">{error}</span>
         </div>
       )}
       {info && (
-        <div className="text-xs text-primary bg-primary/10 border border-primary/20 rounded-lg px-3 py-2 flex items-center gap-2">
+        <div className="text-xs text-foreground bg-[var(--pastel-mint)] border border-transparent rounded-full px-3.5 py-1.5 inline-flex items-center gap-2 self-start">
           <CheckCircle2 className="h-3.5 w-3.5" />
           {info}
         </div>
@@ -321,22 +261,8 @@ export default function SettingsPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="민지가 부를 이름"
-              className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
+              className="rounded-2xl border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:border-foreground"
             />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              기본 GitHub 조직
-            </span>
-            <input
-              value={defaultGithubOrg}
-              onChange={(e) => setDefaultGithubOrg(e.target.value)}
-              placeholder="예: FlowTo-ai"
-              className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
-            />
-            <span className="text-[11px] text-muted-foreground">
-              GitHub sync에서 ?org= 미지정 시 기본값으로 사용 (참고용 — 현재 sync는 FlowTo-ai 고정)
-            </span>
           </label>
           <div className="flex justify-end">
             <Button onClick={saveProfile} disabled={saving} size="sm" className="gap-1.5">
@@ -349,7 +275,7 @@ export default function SettingsPage() {
 
       {/* 동기화 */}
       <Section title="동기화" icon={RefreshCw}>
-        <ul className="flex flex-col divide-y divide-border border border-border rounded-xl overflow-hidden">
+        <ul className="flex flex-col divide-y divide-border border border-border rounded-2xl overflow-hidden">
           {(Object.keys(SYNC_LABEL) as SyncKind[]).map((kind) => {
             const meta = data.sync[kind];
             const Icon = SYNC_ICON[kind];
@@ -363,7 +289,7 @@ export default function SettingsPage() {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium">{SYNC_LABEL[kind]}</div>
                   <div className="text-[11px] text-muted-foreground font-mono mt-0.5">
-                    마지막 {formatDateTime(meta?.at ?? null)} · {describeSync(kind, meta)}
+                    마지막 {formatDateTime(meta?.at ?? null)} · {describeSync(meta)}
                   </div>
                   {meta?.errors && meta.errors.length > 0 && (
                     <div className="text-[11px] text-destructive mt-1 font-mono line-clamp-2">
@@ -398,16 +324,14 @@ export default function SettingsPage() {
           삭제하면 .env.local 값으로 fallback.
         </p>
         <div className="flex flex-col gap-3">
-          {(["anthropic", "gemini", "openai", "github"] as ApiKeyProvider[]).map(
-            (provider) => (
-              <ApiKeyCard
-                key={provider}
-                provider={provider}
-                state={data.integrations.apiKeys[provider]}
-                onChanged={fetchData}
-              />
-            ),
-          )}
+          {VISIBLE_API_KEY_PROVIDERS.map((provider) => (
+            <ApiKeyCard
+              key={provider}
+              provider={provider}
+              state={data.integrations.apiKeys[provider]}
+              onChanged={fetchData}
+            />
+          ))}
         </div>
       </Section>
 
@@ -424,12 +348,6 @@ export default function SettingsPage() {
             }
           />
           <IntegrationRow
-            label="옵시디언 Vault 경로"
-            ok={!!data.integrations.obsidianVault}
-            detail={data.integrations.obsidianVault ?? "OBSIDIAN_VAULT_PATH 미설정"}
-            mono
-          />
-          <IntegrationRow
             label="허용 이메일 (ALLOWED_EMAIL)"
             ok={!!data.integrations.allowedEmail}
             detail={data.integrations.allowedEmail ?? "미설정"}
@@ -441,7 +359,7 @@ export default function SettingsPage() {
       {/* 데일리 인사이트 */}
       {data.todayInsight && (
         <Section title="오늘의 한 마디 (캐시)" icon={CheckCircle2}>
-          <div className="border border-border rounded-xl bg-card p-3">
+          <div className="border border-border rounded-2xl bg-card p-3.5">
             <div className="text-[11px] text-muted-foreground font-mono mb-1">
               {data.todayInsight.date ?? "—"}
             </div>
@@ -535,7 +453,7 @@ function IntegrationRow({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-start gap-3 border border-border rounded-xl bg-card px-3 py-2.5">
+    <div className="flex items-start gap-3 border border-border rounded-2xl bg-card px-3.5 py-3">
       <span
         className={cn(
           "mt-0.5 size-2 rounded-full shrink-0",
@@ -684,7 +602,7 @@ function ApiKeyCard({
           };
 
   return (
-    <div className="border border-border rounded-xl bg-card p-3 flex flex-col gap-2.5">
+    <div className="border border-border rounded-2xl bg-card p-3.5 flex flex-col gap-2.5">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm font-medium">{meta.label}</span>
         <span
@@ -733,7 +651,7 @@ function ApiKeyCard({
           onChange={(e) => setValue(e.target.value)}
           placeholder={meta.placeholder}
           disabled={busy !== null}
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-primary"
+          className="flex-1 rounded-full border border-border bg-background px-4 py-2 text-sm font-mono focus:outline-none focus:border-foreground"
         />
         <Button
           size="sm"
@@ -766,12 +684,12 @@ function ApiKeyCard({
       </div>
 
       {localError && (
-        <div className="text-[11px] text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-2 py-1.5">
+        <div className="text-[11px] text-destructive bg-destructive/5 border border-destructive/30 rounded-xl px-2.5 py-1.5">
           {localError}
         </div>
       )}
       {localInfo && (
-        <div className="text-[11px] text-primary bg-primary/10 border border-primary/20 rounded-md px-2 py-1.5">
+        <div className="text-[11px] text-foreground bg-[var(--pastel-mint)] border border-transparent rounded-xl px-2.5 py-1.5">
           {localInfo}
         </div>
       )}
