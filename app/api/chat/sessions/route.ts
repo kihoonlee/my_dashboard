@@ -8,9 +8,9 @@
 // 정렬: lastMessageAt DESC.
 
 import { NextResponse, type NextRequest } from "next/server";
-import { and, desc, eq, ilike } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { agents, chatSessions } from "@/lib/db/schema";
+import { agents, chatMessages, chatSessions } from "@/lib/db/schema";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureUser } from "@/lib/users/ensure";
 
@@ -53,7 +53,15 @@ export async function GET(request: NextRequest) {
     conditions.push(eq(chatSessions.agentId, agentIdFilter));
   }
   if (qParam && qParam.trim().length > 0) {
-    conditions.push(ilike(chatSessions.title, `%${qParam.trim()}%`));
+    const q = `%${qParam.trim()}%`;
+    // title 또는 같은 세션의 chat_messages.content에 부분 일치
+    const messageMatch = sql`EXISTS (
+      SELECT 1 FROM ${chatMessages} m
+      WHERE m.session_id = ${chatSessions.id}
+        AND m.content ILIKE ${q}
+    )`;
+    const titleOrContent = or(ilike(chatSessions.title, q), messageMatch);
+    if (titleOrContent) conditions.push(titleOrContent);
   }
 
   const rows = await db
