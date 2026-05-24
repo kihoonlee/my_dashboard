@@ -4,7 +4,7 @@
 // 좌측 second-column: 검색 + 에이전트 6명 selector (탭) + 세션 목록 placeholder.
 // 메인: 빈 상태에 큰 인사 + 제안 chip grid, 대화 중에는 메시지 + 하단 둥근 input.
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AgentBadge, AgentAvatar } from "@/components/agent-badge";
 import {
@@ -56,6 +56,27 @@ type ChatMessage = {
   meta?: { durationMs: number; costUsd: number; iterations: number };
 };
 
+type SessionItem = {
+  id: string;
+  title: string | null;
+  agentEnglishName: string | null;
+  lastMessageAt: string;
+  createdAt: string;
+};
+
+function formatRelativeTime(iso: string): string {
+  const d = new Date(iso);
+  const diffMs = Date.now() - d.getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return "방금";
+  if (min < 60) return `${min}분 전`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}시간 전`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}일 전`;
+  return d.toLocaleDateString("ko-KR", { month: "2-digit", day: "2-digit" });
+}
+
 function ChatContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -71,6 +92,40 @@ function ChatContent() {
   const [streaming, setStreaming] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // 세션 목록 (좌측 second-column)
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [debouncedQuery, setDebouncedQuery] = useState<string>("");
+  const [loadingSessions, setLoadingSessions] = useState<boolean>(false);
+
+  // q debounce 300ms
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(searchQuery.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
+
+  const fetchSessions = useCallback(async () => {
+    setLoadingSessions(true);
+    try {
+      const url = new URL("/api/chat/sessions", window.location.origin);
+      url.searchParams.set("agent", currentAgent);
+      if (debouncedQuery) url.searchParams.set("q", debouncedQuery);
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const data = (await res.json()) as { sessions: SessionItem[] };
+      setSessions(data.sessions ?? []);
+    } catch {
+      // 세션 목록 실패는 메인 흐름과 별도 — silent fail
+      setSessions([]);
+    } finally {
+      setLoadingSessions(false);
+    }
+  }, [currentAgent, debouncedQuery]);
+
+  useEffect(() => {
+    void fetchSessions();
+  }, [fetchSessions]);
 
   useEffect(() => {
     setSessionId(sessionParam);
@@ -241,6 +296,12 @@ function ChatContent() {
     );
 
     setStreaming(false);
+    // 새 세션이 생성됐거나 lastMessageAt이 갱신됐을 수 있으니 리스트 새로고침
+    void fetchSessions();
+  }
+
+  function selectSession(s: SessionItem) {
+    router.replace(`/chat?agent=${currentAgent}&session=${s.id}`);
   }
 
   const isEmpty = messages.length === 0 && !streaming;
@@ -267,13 +328,25 @@ function ChatContent() {
         </div>
 
         <div className="px-4">
-          <div className="flex items-center gap-2 rounded-full bg-muted/60 px-3.5 h-9 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 rounded-full bg-muted/60 px-3.5 h-9 text-sm text-muted-foreground focus-within:bg-muted">
             <Search className="h-4 w-4" />
             <input
               type="text"
-              placeholder="검색"
-              className="flex-1 bg-transparent focus:outline-none placeholder:text-muted-foreground/60"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="대화 제목 검색"
+              className="flex-1 bg-transparent text-foreground focus:outline-none placeholder:text-muted-foreground/60"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                aria-label="검색 지우기"
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <XCircle className="h-3.5 w-3.5" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -312,6 +385,57 @@ function ChatContent() {
               </li>
             ))}
           </ul>
+        </div>
+
+        {/* 세션 목록 */}
+        <div className="mt-5 px-4 flex-1 min-h-0 flex flex-col">
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground/80 font-semibold mb-2 flex items-center gap-2">
+            <span>{currentMeta.name}와의 대화</span>
+            {loadingSessions && (
+              <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+            )}
+          </div>
+          {sessions.length === 0 ? (
+            <p className="text-[11px] text-muted-foreground/70 py-2">
+              {debouncedQuery
+                ? "검색 결과가 없어요."
+                : "아직 대화가 없어요. 아래에서 시작해보세요."}
+            </p>
+          ) : (
+            <ul className="flex flex-col gap-0.5 overflow-y-auto -mx-1 pr-1">
+              {sessions.map((s) => {
+                const active = sessionId === s.id;
+                return (
+                  <li key={s.id}>
+                    <button
+                      type="button"
+                      onClick={() => selectSession(s)}
+                      className={cn(
+                        "w-full text-left rounded-xl px-2.5 py-2 transition",
+                        active
+                          ? "bg-foreground text-background"
+                          : "hover:bg-muted text-foreground",
+                      )}
+                    >
+                      <div className="text-xs font-medium truncate">
+                        {s.title?.trim() || "(제목 없음)"}
+                      </div>
+                      <div
+                        className={cn(
+                          "text-[10px] mt-0.5",
+                          active
+                            ? "text-background/60"
+                            : "text-muted-foreground",
+                        )}
+                      >
+                        {formatRelativeTime(s.lastMessageAt)}
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
       </aside>
 
