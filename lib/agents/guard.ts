@@ -100,6 +100,18 @@ export async function checkAfterInvoke(agentId: string): Promise<void> {
   if (recent.length < 5) return;
   if (!recent.every((r) => r.isError)) return;
 
+  // agent 정보
+  const [agent] = await db
+    .select({
+      name: agents.name,
+      englishName: agents.englishName,
+    })
+    .from(agents)
+    .where(eq(agents.id, agentId))
+    .limit(1);
+
+  if (!agent) return;
+
   await db
     .update(agents)
     .set({
@@ -109,5 +121,35 @@ export async function checkAfterInvoke(agentId: string): Promise<void> {
     })
     .where(eq(agents.id, agentId));
 
-  console.warn(`[guard] agent ${agentId} auto-paused: 5 consecutive errors`);
+  console.warn(
+    `[guard] agent ${agent.englishName} (${agent.name}) auto-paused: 5 consecutive errors`,
+  );
+
+  // 인앱 + (옵션) 텔레그램 알림 — best-effort, 실패해도 본 흐름엔 영향 없음.
+  // 단일 사용자 환경: ALLOWED_EMAIL로 user 찾아 그 userId로 발송.
+  try {
+    const { getCronUserId } = await import("@/lib/cron/auth");
+    const userId = await getCronUserId();
+    if (!userId) return;
+
+    const { dispatchNotification } = await import(
+      "@/lib/notifications/dispatch"
+    );
+    await dispatchNotification({
+      userId,
+      kind: "agent_paused",
+      title: `${agent.name} 자동 일시정지`,
+      bodyMd: `**${agent.name}** (${agent.englishName})이 최근 5회 연속 호출 실패로 자동 일시정지됐어요. \`/agents/${agent.englishName}\`에서 상세 로그 확인 후 재활성화하세요.`,
+      payload: {
+        agent_id: agentId,
+        english_name: agent.englishName,
+        reason: "5_consecutive_errors",
+      },
+    });
+  } catch (e) {
+    console.warn(
+      `[guard] dispatchNotification failed for ${agent.englishName}:`,
+      e instanceof Error ? e.message : String(e),
+    );
+  }
 }
