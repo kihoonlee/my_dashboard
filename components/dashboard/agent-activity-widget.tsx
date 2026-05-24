@@ -61,8 +61,13 @@ export function AgentActivityWidget({
           </div>
 
           {/* 24h bar */}
-          <div className="h-20 -mx-1">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-20 -mx-1 min-w-0">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+              minWidth={0}
+              minHeight={80}
+            >
               <BarChart
                 data={data.hourly}
                 margin={{ top: 0, right: 4, left: 4, bottom: 0 }}

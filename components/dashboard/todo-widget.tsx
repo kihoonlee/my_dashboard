@@ -5,7 +5,7 @@
 
 import Link from "next/link";
 import { CheckSquare, ChevronRight } from "lucide-react";
-import { Cell, Pie, PieChart, ResponsiveContainer } from "recharts";
+import { Cell, Pie, PieChart } from "recharts";
 import type { DashboardData } from "./types";
 
 export function TodoWidget({
@@ -68,24 +68,22 @@ export function TodoWidget({
                 0
               </div>
             ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={chart}
-                    dataKey="value"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={28}
-                    outerRadius={45}
-                    paddingAngle={2}
-                    stroke="none"
-                  >
-                    {chart.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+              <PieChart width={96} height={96}>
+                <Pie
+                  data={chart}
+                  dataKey="value"
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={28}
+                  outerRadius={45}
+                  paddingAngle={2}
+                  stroke="none"
+                >
+                  {chart.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Pie>
+              </PieChart>
             )}
           </div>
           <div className="flex-1 flex flex-col gap-1.5 text-xs">

@@ -14,9 +14,14 @@ if (!connectionString) {
   throw new Error("DATABASE_URL is not set");
 }
 
-// 진단: 비밀번호 가린 형태로 host:port 노출 (한 번만).
-// next.config.ts의 removeConsole이 console.log는 제거하지만 warn은 유지.
-if (process.env.NODE_ENV !== "test") {
+// 진단: 비밀번호 가린 형태로 host:port 노출. Next.js prod가 multiple workers로
+// 같은 module을 여러 번 init하는 케이스에서도 한 번만 출력하도록 globalThis 가드.
+declare global {
+  // eslint-disable-next-line no-var
+  var __myhub_db_logged: boolean | undefined;
+}
+if (process.env.NODE_ENV !== "test" && !globalThis.__myhub_db_logged) {
+  globalThis.__myhub_db_logged = true;
   const masked = connectionString.replace(/\/\/[^@]+@/, "//***@");
   console.warn("[db] connecting to", masked);
 }
