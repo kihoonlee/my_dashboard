@@ -1,9 +1,16 @@
 "use client";
 
-// 사이드바 — 데스크톱은 고정 컬럼, 모바일은 햄버거 → 좌측 드로어.
-// 모바일 드로어 열기/닫기 상태는 useSidebar() 훅으로 노출.
+// Owllet 스타일 narrow icon sidebar — 약 72px width.
+// 아이콘 + 짧은 라벨(2-3자) 세로 배치, 활성 항목은 검은 chip 배경.
+// 모바일은 햄버거 → 드로어 (full width로 확장).
 
-import { createContext, useCallback, useContext, useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -18,6 +25,7 @@ import {
   Bot,
   Settings,
   X,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -25,24 +33,24 @@ type MenuItem = {
   href: string;
   label: string;
   icon: React.ComponentType<{ className?: string }>;
-  phase: string;
 };
 
 const MENU_ITEMS: MenuItem[] = [
-  { href: "/", label: "홈", icon: Home, phase: "보조 환영" },
-  { href: "/diary", label: "일기", icon: BookOpen, phase: "달이" },
-  { href: "/memos", label: "메모", icon: StickyNote, phase: "노트" },
-  { href: "/todos", label: "할일", icon: CheckSquare, phase: "Todo" },
-  { href: "/calendar", label: "캘린더", icon: Calendar, phase: "시아" },
-  { href: "/chat", label: "에이전트 대화", icon: MessageCircle, phase: "지원" },
-  { href: "/discussions", label: "토론", icon: Users, phase: "메인 진행" },
-  { href: "/notifications", label: "알림", icon: Bell, phase: "" },
-  { href: "/agents", label: "AI 팀 (6명)", icon: Bot, phase: "관리" },
-  { href: "/settings", label: "설정", icon: Settings, phase: "" },
+  { href: "/", label: "홈", icon: Home },
+  { href: "/diary", label: "일기", icon: BookOpen },
+  { href: "/memos", label: "메모", icon: StickyNote },
+  { href: "/todos", label: "할일", icon: CheckSquare },
+  { href: "/calendar", label: "캘린더", icon: Calendar },
+  { href: "/chat", label: "대화", icon: MessageCircle },
+  { href: "/discussions", label: "토론", icon: Users },
+  { href: "/notifications", label: "알림", icon: Bell },
 ];
 
-// ─────────────────────────────────────────────────────────
-// Mobile drawer 상태 컨텍스트
+const FOOTER_ITEMS: MenuItem[] = [
+  { href: "/agents", label: "팀", icon: Bot },
+  { href: "/settings", label: "설정", icon: Settings },
+];
+
 // ─────────────────────────────────────────────────────────
 type SidebarCtx = { open: boolean; setOpen: (v: boolean) => void };
 const SidebarContext = createContext<SidebarCtx | null>(null);
@@ -63,18 +71,45 @@ export function useSidebar() {
 }
 
 // ─────────────────────────────────────────────────────────
-// 사이드바 본체
-// ─────────────────────────────────────────────────────────
+function NavItem({
+  href,
+  label,
+  Icon,
+  active,
+}: {
+  href: string;
+  label: string;
+  Icon: React.ComponentType<{ className?: string }>;
+  active: boolean;
+}) {
+  return (
+    <li>
+      <Link
+        href={href}
+        title={label}
+        aria-current={active ? "page" : undefined}
+        className={cn(
+          "group flex flex-col items-center justify-center gap-0.5 mx-2 my-0.5 rounded-2xl py-2.5 transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring",
+          active
+            ? "bg-foreground text-background"
+            : "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
+        )}
+      >
+        <Icon className="h-[18px] w-[18px]" />
+        <span className="text-[10px] font-medium leading-none">{label}</span>
+      </Link>
+    </li>
+  );
+}
+
 export function Sidebar() {
   const pathname = usePathname();
   const { open, setOpen } = useSidebar();
 
-  // 라우트 변경 시 모바일 드로어 자동 닫기
   useEffect(() => {
     setOpen(false);
   }, [pathname, setOpen]);
 
-  // ESC로 닫기
   const handleEsc = useCallback(
     (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
@@ -87,9 +122,14 @@ export function Sidebar() {
     return () => window.removeEventListener("keydown", handleEsc);
   }, [open, handleEsc]);
 
+  function isActive(href: string) {
+    return href === "/"
+      ? pathname === "/"
+      : pathname === href || pathname.startsWith(href + "/");
+  }
+
   return (
     <>
-      {/* 모바일 백드롭 */}
       {open && (
         <div
           className="md:hidden fixed inset-0 z-40 bg-foreground/40 backdrop-blur-sm"
@@ -100,70 +140,71 @@ export function Sidebar() {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200",
-          // 모바일: 슬라이드 in/out
+          "fixed inset-y-0 left-0 z-50 w-[72px] shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-transform duration-200",
           open ? "translate-x-0 flex" : "-translate-x-full hidden",
-          // 데스크톱: 항상 표시, 정적 위치
-          "md:static md:flex md:translate-x-0 md:w-60 lg:w-64",
+          "md:static md:flex md:translate-x-0",
         )}
       >
-        <div className="px-5 py-5 border-b border-sidebar-border flex items-center justify-between">
-          <Link href="/" className="flex items-baseline gap-2">
-            <span className="text-lg font-bold tracking-tight text-foreground">
-              MyHub
-            </span>
-            <span className="text-xs text-muted-foreground">v2</span>
-          </Link>
-          {/* 모바일 닫기 버튼 — 44px 터치 타깃 */}
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            className="md:hidden inline-flex items-center justify-center min-h-11 min-w-11 -mr-2 rounded-md hover:bg-sidebar-accent text-muted-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar"
-            aria-label="사이드바 닫기"
+        {/* 로고 영역 */}
+        <div className="flex items-center justify-center py-4 border-b border-sidebar-border">
+          <Link
+            href="/"
+            className="flex h-9 w-9 items-center justify-center rounded-2xl bg-foreground text-background text-xs font-bold tracking-tight"
+            title="MyHub"
           >
-            <X className="h-4 w-4" aria-hidden />
-          </button>
+            MH
+          </Link>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-3 px-2">
-          <ul className="flex flex-col gap-0.5">
-            {MENU_ITEMS.map(({ href, label, icon: Icon, phase }) => {
-              const active =
-                href === "/"
-                  ? pathname === "/"
-                  : pathname === href || pathname.startsWith(href + "/");
-              return (
-                <li key={href}>
-                  <Link
-                    href={href}
-                    title={`${label} (${phase})`}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar",
-                      active
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                        : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-                    )}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    <span className="truncate">{label}</span>
-                  </Link>
-                </li>
-              );
-            })}
+        {/* + 신규 진입 (대화 시작) */}
+        <div className="px-2 pt-2">
+          <Link
+            href="/chat?agent=main"
+            title="혜원에게 대화 시작"
+            className="flex flex-col items-center justify-center gap-0.5 mx-0 rounded-2xl py-2.5 text-muted-foreground hover:bg-sidebar-accent hover:text-foreground transition"
+          >
+            <Plus className="h-[18px] w-[18px]" />
+            <span className="text-[10px] font-medium leading-none">새 대화</span>
+          </Link>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto py-1">
+          <ul className="flex flex-col">
+            {MENU_ITEMS.map(({ href, label, icon }) => (
+              <NavItem
+                key={href}
+                href={href}
+                label={label}
+                Icon={icon}
+                active={isActive(href)}
+              />
+            ))}
           </ul>
         </nav>
 
-        <div className="px-3 py-3 border-t border-sidebar-border">
-          <form action="/auth/signout" method="post">
-            <button
-              type="submit"
-              className="w-full text-left text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-2 rounded-lg hover:bg-sidebar-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:ring-offset-1 focus-visible:ring-offset-sidebar"
-            >
-              로그아웃
-            </button>
-          </form>
+        <div className="border-t border-sidebar-border py-1">
+          <ul className="flex flex-col">
+            {FOOTER_ITEMS.map(({ href, label, icon }) => (
+              <NavItem
+                key={href}
+                href={href}
+                label={label}
+                Icon={icon}
+                active={isActive(href)}
+              />
+            ))}
+          </ul>
         </div>
+
+        {/* 모바일 닫기 */}
+        <button
+          type="button"
+          onClick={() => setOpen(false)}
+          className="md:hidden absolute top-2 right-2 inline-flex items-center justify-center min-h-9 min-w-9 rounded-full hover:bg-sidebar-accent text-muted-foreground"
+          aria-label="사이드바 닫기"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </aside>
     </>
   );

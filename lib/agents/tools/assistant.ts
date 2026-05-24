@@ -1,4 +1,4 @@
-// 보조 에이전트(태오) 전용 도구.
+// 보조 에이전트(민지) 전용 도구.
 // - get_user_context: 사용자 최근 일기/메모/todo 패턴 요약 (사용자 컨텍스트 마스터 역할)
 // - web_search: main과 동일한 server tool wrapper (재사용)
 

@@ -8,7 +8,6 @@
 // 부모가 "본문에 추가" 버튼을 띄워서 사용자 수락 시 본문에 삽입.
 
 import { useRef, useState } from "react";
-import { Button } from "@/components/ui/button";
 import { AgentBadge } from "@/components/agent-badge";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -128,11 +127,15 @@ export function AgentSidepanel(props: {
   }
 
   return (
-    <aside className="flex flex-col h-full border-l border-border bg-card">
-      <header className="flex items-center gap-2 p-4 border-b border-border">
-        <AgentBadge englishName={agentEnglishName} size="sm" showName={false} />
+    <aside className="flex flex-col h-full border-l border-border bg-sidebar">
+      <header className="flex items-center gap-2.5 p-4 border-b border-border">
+        <AgentBadge
+          englishName={agentEnglishName}
+          size="sm"
+          showName={false}
+        />
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-sm">{agentDisplayName}</h3>
+          <h3 className="font-semibold text-sm">{agentDisplayName}</h3>
           {helperText && (
             <p className="text-[11px] text-muted-foreground truncate">
               {helperText}
@@ -142,14 +145,14 @@ export function AgentSidepanel(props: {
       </header>
 
       {error && (
-        <div className="m-3 text-xs border border-destructive/40 bg-destructive/10 text-destructive rounded p-2">
+        <div className="m-3 text-xs border border-destructive/30 bg-destructive/5 text-destructive rounded-2xl p-3">
           {error}
         </div>
       )}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
         {messages.length === 0 && !streaming ? (
-          <p className="text-xs text-muted-foreground text-center py-6">
+          <p className="text-xs text-muted-foreground text-center py-8">
             자연어로 무엇이든 물어보세요.
           </p>
         ) : (
@@ -158,10 +161,10 @@ export function AgentSidepanel(props: {
               <div
                 key={i}
                 className={cn(
-                  "rounded-lg px-3 py-2 text-xs whitespace-pre-wrap leading-relaxed",
+                  "rounded-2xl px-3.5 py-2.5 text-xs whitespace-pre-wrap leading-relaxed",
                   m.role === "user"
-                    ? "bg-primary/10 text-foreground self-end max-w-[88%]"
-                    : "bg-muted text-foreground self-start max-w-[92%]",
+                    ? "bg-foreground text-background self-end max-w-[88%]"
+                    : "bg-card text-foreground self-start max-w-[92%] border border-border",
                 )}
               >
                 {m.content ||
@@ -180,7 +183,7 @@ export function AgentSidepanel(props: {
       </div>
 
       <div className="p-3 border-t border-border">
-        <div className="flex gap-1.5">
+        <div className="flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1">
           <input
             type="text"
             value={input}
@@ -193,11 +196,21 @@ export function AgentSidepanel(props: {
             }}
             placeholder={`${agentDisplayName}에게 묻기…`}
             disabled={streaming}
-            className="flex-1 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            className="flex-1 bg-transparent text-xs focus:outline-none placeholder:text-muted-foreground/60 py-1"
           />
-          <Button size="sm" onClick={send} disabled={streaming || !input.trim()}>
-            {streaming ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "→"}
-          </Button>
+          <button
+            type="button"
+            onClick={() => send()}
+            disabled={streaming || !input.trim()}
+            className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-foreground text-background disabled:opacity-30 hover:opacity-90"
+            aria-label="보내기"
+          >
+            {streaming ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              "→"
+            )}
+          </button>
         </div>
       </div>
     </aside>

@@ -1,6 +1,6 @@
 "use client";
 
-// /memos — 메모 리스트 + 새 메모 작성 + 노트(메모 에이전트) 사이드패널.
+// /memos — 메모 리스트 + 새 메모 작성 + 다솜(메모 에이전트) 사이드패널.
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -105,7 +105,7 @@ export default function MemosPage() {
               <li key={m.id}>
                 <Link
                   href={`/memos/${m.id}`}
-                  className="block rounded-lg border border-border bg-card p-3 hover:bg-muted/40 transition"
+                  className="block rounded-2xl border border-border bg-card p-3 hover:bg-muted/40 transition"
                 >
                   <div className="flex items-baseline justify-between gap-3 mb-1">
                     <span className="font-medium text-sm truncate">
@@ -128,7 +128,7 @@ export default function MemosPage() {
       <div className="w-80 shrink-0">
         <AgentSidepanel
           agentEnglishName="memo"
-          agentDisplayName="노트"
+          agentDisplayName="다솜"
           helperText="todo / 일기 / 이전 메모 검색 + 메모로 가져오기"
           pageContext="[페이지 컨텍스트] 메모 리스트 페이지."
         />

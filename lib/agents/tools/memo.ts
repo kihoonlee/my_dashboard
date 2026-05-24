@@ -1,4 +1,4 @@
-// 메모 에이전트(노트) 전용 도구.
+// 메모 에이전트(다솜) 전용 도구.
 // - list_todos_summary: 오늘/중요/마감지남/전체 todo 요약
 // - search_diaries / search_memos: 검색 (diary.ts의 함수 재사용)
 // - propose_memo_block: UI에 본문 삽입 제안 카드

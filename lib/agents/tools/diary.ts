@@ -1,4 +1,4 @@
-// 일기 에이전트(달이) 전용 도구.
+// 일기 에이전트(서연) 전용 도구.
 // - search_diaries / search_memos / get_diary: 검색·조회
 // - propose_diary_block: UI에 "이 블록 일기에 추가하시겠어요?" 카드 띄우기 신호
 

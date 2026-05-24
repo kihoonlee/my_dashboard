@@ -4,17 +4,26 @@
 import Image from "next/image";
 import { cn } from "@/lib/utils";
 
+// v2 — v1 캐릭터를 v2 역할에 매핑:
+//   main=혜원 · assistant=민지 · daily=하영 · diary=서연 · memo=다솜 · calendar=수민
+// 이미지 파일은 v1 파일명 그대로 사용 (rename 비용 회피).
 const KOREAN_NAMES: Record<string, string> = {
-  main: "지원",
-  assistant: "태오",
-  daily: "새벽",
-  diary: "달이",
-  memo: "노트",
-  calendar: "시아",
+  main: "혜원",
+  assistant: "민지",
+  daily: "하영",
+  diary: "서연",
+  memo: "다솜",
+  calendar: "수민",
 };
 
-// v2 — 프로필 이미지는 추가될 때 /public/agents/{englishName}.png 로 두면 자동 매핑.
-const AGENT_PROFILE_IMAGES: Record<string, string> = {};
+const AGENT_PROFILE_IMAGES: Record<string, string> = {
+  main: "/agents/hyewon.png",
+  assistant: "/agents/minji.png",
+  daily: "/agents/hayoung.png",
+  diary: "/agents/seoyeon.png",
+  memo: "/agents/dasom.png",
+  calendar: "/agents/soomin.png",
+};
 
 export function AgentAvatar({
   englishName,

@@ -159,7 +159,7 @@ async function runDiscussionLoop(discussionId: string): Promise<void> {
     });
     const synthResult = await invokeAgent({
       model: mainAgent.model,
-      systemPrompt: `당신은 토론 진행자 "지원" 입니다. 의견을 종합하고 결론에 도달했는지 판단합니다.
+      systemPrompt: `당신은 토론 진행자 "혜원" 입니다. 의견을 종합하고 결론에 도달했는지 판단합니다.
 응답 형식 — 반드시 다음 두 줄로 시작:
 RESOLVED: yes | no
 SUMMARY: <한국어 markdown으로 종합 요약. 결론, 핵심 합의점, 남은 이견을 명시>

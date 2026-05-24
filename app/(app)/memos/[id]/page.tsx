@@ -162,7 +162,7 @@ export default function MemoEditor() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           placeholder="제목 (선택)"
-          className="w-full rounded-lg border border-border bg-background px-3 py-2 text-base font-semibold focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 mb-3"
+          className="w-full rounded-2xl border border-border bg-background px-4 py-2.5 text-base font-semibold focus:outline-none focus:border-foreground mb-3"
         />
 
         {/* 툴바 */}
@@ -174,9 +174,9 @@ export default function MemoEditor() {
               type="button"
               onClick={() => setFontSize(sz)}
               className={cn(
-                "rounded border px-2 py-0.5",
+                "rounded-full border px-3 py-1",
                 fontSize === sz
-                  ? "border-primary bg-primary/10 text-foreground"
+                  ? "border-foreground bg-foreground text-background"
                   : "border-border text-muted-foreground hover:bg-muted",
               )}
             >
@@ -198,7 +198,7 @@ export default function MemoEditor() {
           onChange={(e) => setBody(e.target.value)}
           rows={18}
           className={cn(
-            "w-full rounded-lg border border-border bg-background px-3 py-2 font-mono leading-relaxed focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-y",
+            "w-full rounded-2xl border border-border bg-background px-4 py-3 font-mono leading-relaxed focus:outline-none focus:border-foreground resize-y",
             fontSize === "sm" && "text-xs",
             fontSize === "base" && "text-sm",
             fontSize === "lg" && "text-base",
@@ -243,7 +243,7 @@ export default function MemoEditor() {
       <div className="w-80 shrink-0">
         <AgentSidepanel
           agentEnglishName="memo"
-          agentDisplayName="노트"
+          agentDisplayName="다솜"
           helperText="todo / 일기 / 이전 메모 검색 → 메모에 가져오기"
           pageContext={`[페이지 컨텍스트] 메모 편집 페이지. memo_id=${id}. 현재 본문: """${body.slice(
             0,

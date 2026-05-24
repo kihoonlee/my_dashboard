@@ -1,7 +1,7 @@
 "use client";
 
-// /calendar — 캘린더 이벤트 리스트(7일) + 시아 사이드패널.
-// MVP는 시각화 없이 list 형태. 시아에게 자연어로 등록 요청.
+// /calendar — 캘린더 이벤트 리스트(7일) + 수민 사이드패널.
+// MVP는 시각화 없이 list 형태. 수민에게 자연어로 등록 요청.
 
 import { useCallback, useEffect, useState } from "react";
 import { AgentSidepanel } from "@/components/agent-sidepanel";
@@ -131,7 +131,7 @@ export default function CalendarPage() {
                   {byDate[d].map((ev) => (
                     <li
                       key={ev.id}
-                      className="rounded-lg border border-border bg-card p-2.5 flex items-center gap-3"
+                      className="rounded-2xl border border-border bg-card p-2.5 flex items-center gap-3"
                     >
                       <span
                         className="w-1.5 self-stretch rounded-full shrink-0"
@@ -165,7 +165,7 @@ export default function CalendarPage() {
       <div className="w-80 shrink-0">
         <AgentSidepanel
           agentEnglishName="calendar"
-          agentDisplayName="시아"
+          agentDisplayName="수민"
           helperText="자연어 일정 등록 + 정기 일정 + 사전 알림"
           pageContext={`[페이지 컨텍스트] 캘린더 페이지. 표시 범위: ${today} ~ ${weekEnd}. 등록된 이벤트 수: ${items.length}.`}
         />

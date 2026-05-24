@@ -48,7 +48,7 @@ export default function DiscussionsPage() {
     <div className="p-6 max-w-3xl mx-auto w-full">
       <h1 className="text-2xl font-bold tracking-tight mb-1">토론</h1>
       <p className="text-xs text-muted-foreground mb-4">
-        메인 비서(지원)에게 토론을 요청하면 여기에 결과 리포트가 도착합니다.
+        메인 비서(혜원)에게 토론을 요청하면 여기에 결과 리포트가 도착합니다.
       </p>
 
       {error && (
@@ -71,7 +71,7 @@ export default function DiscussionsPage() {
             <li key={d.id}>
               <Link
                 href={`/discussions/${d.id}`}
-                className="block rounded-lg border border-border bg-card p-3 hover:bg-muted/40 transition"
+                className="block rounded-2xl border border-border bg-card p-3 hover:bg-muted/40 transition"
               >
                 <div className="flex items-baseline justify-between gap-3 mb-1">
                   <span className="font-medium text-sm truncate">{d.topic}</span>

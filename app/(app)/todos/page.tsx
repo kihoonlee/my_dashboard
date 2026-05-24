@@ -133,7 +133,7 @@ export default function TodosPage() {
       )}
 
       {/* 새 todo */}
-      <div className="rounded-xl border border-border bg-card p-4 mb-4">
+      <div className="rounded-2xl border border-border bg-card p-4 mb-4">
         <div className="flex flex-col gap-2">
           <input
             type="text"
@@ -146,7 +146,7 @@ export default function TodosPage() {
               }
             }}
             placeholder="새 할일…"
-            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+            className="w-full rounded-full border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:border-foreground"
           />
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <input
@@ -194,9 +194,9 @@ export default function TodosPage() {
             type="button"
             onClick={() => setFilter(k)}
             className={cn(
-              "rounded-full border px-3 py-1 transition",
+              "rounded-full border px-3 py-1.5 transition",
               filter === k
-                ? "border-primary bg-primary/10 text-foreground"
+                ? "border-foreground bg-foreground text-background"
                 : "border-border text-muted-foreground hover:bg-muted",
             )}
           >
@@ -218,7 +218,7 @@ export default function TodosPage() {
           {items.map((t) => (
             <li
               key={t.id}
-              className="flex items-start gap-2 rounded-lg border border-border bg-card p-3"
+              className="flex items-start gap-2 rounded-2xl border border-border bg-card p-3"
             >
               <button
                 type="button"

@@ -145,7 +145,7 @@ function CommandPaletteModal({ onClose }: { onClose: () => void }) {
       },
       {
         id: "action-new-chat",
-        label: "새 대화 시작 (지원)",
+        label: "새 대화 시작 (혜원)",
         keywords: ["new", "chat", "새", "대화", "시작"],
         icon: PlusCircle,
         href: "/chat?agent=main",

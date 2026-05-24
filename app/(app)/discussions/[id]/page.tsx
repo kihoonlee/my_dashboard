@@ -111,7 +111,7 @@ export default function DiscussionDetail() {
           </span>
         </div>
       ) : (
-        <div className="rounded-lg border border-border bg-card p-4">
+        <div className="rounded-2xl border border-border bg-card p-4">
           <div className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
             결과 리포트
           </div>
@@ -141,7 +141,7 @@ export default function DiscussionDetail() {
               {turns.map((t) => (
                 <li
                   key={t.id}
-                  className="rounded-lg border border-border bg-card p-3"
+                  className="rounded-2xl border border-border bg-card p-3"
                 >
                   <div className="flex items-center gap-2 mb-2 text-xs">
                     {t.speakerEnglishName && (

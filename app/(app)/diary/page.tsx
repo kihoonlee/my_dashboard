@@ -1,6 +1,6 @@
 "use client";
 
-// /diary — 날짜 선택 일기 작성 + 이미지 업로드 + 달이 사이드패널.
+// /diary — 날짜 선택 일기 작성 + 이미지 업로드 + 서연 사이드패널.
 // 좌측 날짜 picker + 최근 7개 일기 리스트, 우측 본문 에디터 + 사이드패널.
 
 import { useCallback, useEffect, useState } from "react";
@@ -232,21 +232,21 @@ export default function DiaryPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="제목 (선택)"
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-base font-medium focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-2xl border border-border bg-background px-4 py-2.5 text-base font-medium focus:outline-none focus:border-foreground"
             />
             <input
               type="text"
               value={mood}
               onChange={(e) => setMood(e.target.value)}
               placeholder="기분 한 줄 (선택)"
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-2xl border border-border bg-background px-4 py-2.5 text-sm focus:outline-none focus:border-foreground"
             />
             <textarea
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder="오늘 일기를 적어주세요…"
               rows={16}
-              className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm font-mono leading-relaxed focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 resize-y"
+              className="w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm font-mono leading-relaxed focus:outline-none focus:border-foreground resize-y"
             />
 
             <div className="flex items-center gap-2">
@@ -304,11 +304,11 @@ export default function DiaryPage() {
         )}
       </main>
 
-      {/* 우측: 달이 사이드패널 */}
+      {/* 우측: 서연 사이드패널 */}
       <div className="w-80 shrink-0">
         <AgentSidepanel
           agentEnglishName="diary"
-          agentDisplayName="달이"
+          agentDisplayName="서연"
           helperText="이전 일기·메모 검색 및 인용 제안"
           pageContext={`[페이지 컨텍스트] 현재 일기 작성 날짜: ${date}. 현재 본문 길이: ${body.length}자.`}
           onProposal={applyProposal}

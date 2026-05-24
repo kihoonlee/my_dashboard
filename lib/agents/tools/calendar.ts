@@ -1,4 +1,4 @@
-// 캘린더 에이전트(시아) 전용 도구.
+// 캘린더 에이전트(수민) 전용 도구.
 // - list_events_range: 기간 내 이벤트 조회 (cache 우선, primary calendar 기준)
 // - create_event / delete_event: Google Calendar API 직접 호출
 // - register_recurring_template: 반복 일정 + 사전 알림 등록

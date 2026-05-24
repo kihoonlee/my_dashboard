@@ -1,4 +1,4 @@
-// 데일리 에이전트(새벽) 전용 도구.
+// 데일리 에이전트(하영) 전용 도구.
 // 매일 오전 8시 cron으로 자동 실행되거나 사용자가 직접 대화할 때.
 
 import type { AgentTool } from "@/lib/anthropic/client";

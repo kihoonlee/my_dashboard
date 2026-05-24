@@ -1,4 +1,4 @@
-// 메인 에이전트(지원) 전용 도구.
+// 메인 에이전트(혜원) 전용 도구.
 // - web_search: Anthropic web_search_20250305 server tool을 단발성으로 호출하는 wrapper
 // - list_agent_health: 6명 에이전트의 최근 24h 호출/에러/비용 요약
 // - send_notification: lib/notifications/dispatch.ts 로 위임

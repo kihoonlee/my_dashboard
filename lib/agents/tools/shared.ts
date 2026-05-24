@@ -8,12 +8,12 @@ import { agents } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 const KOREAN_NAMES: Record<string, string> = {
-  main: "지원 (메인 비서·CSO·토론 진행)",
-  assistant: "태오 (보조·CTO·반대 시각)",
-  daily: "새벽 (데일리 리포터)",
-  diary: "달이 (일기 어시스턴트)",
-  memo: "노트 (메모 어시스턴트)",
-  calendar: "시아 (캘린더 어시스턴트)",
+  main: "혜원 (메인 비서·CSO·토론 진행)",
+  assistant: "민지 (보조·CTO·반대 시각)",
+  daily: "하영 (데일리 리포터)",
+  diary: "서연 (일기 어시스턴트)",
+  memo: "다솜 (메모 어시스턴트)",
+  calendar: "수민 (캘린더 어시스턴트)",
 };
 
 /**
