@@ -1,10 +1,9 @@
 import { config as loadDotenv } from "dotenv";
-// tsx로 직접 실행되는 스크립트(seed.ts / enable-extensions.ts 등)를 위해
-// 모듈 import 시점에 dotenv를 먼저 로드한다. Next.js 런타임에서는 process.env가
-// 이미 채워져 있어 영향 없음 (loadDotenv는 기존 값을 덮어쓰지 않음).
-if (!process.env.DATABASE_URL) {
-  loadDotenv({ path: ".env.local" });
-}
+// Always load .env.local — Next.js prod runtime이 launchd 등 sandboxed env에서
+// .env.local을 못 읽는 케이스가 있어 명시 로드한다. dotenv는 기본 override:false
+// 이므로 process.env에 이미 값이 있으면(plist EnvironmentVariables 등) 안 덮어쓴다.
+// 또한 tsx 직접 실행 스크립트(seed.ts / enable-extensions.ts)도 같은 경로로 동작.
+loadDotenv({ path: ".env.local" });
 
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
@@ -13,6 +12,13 @@ import * as schema from "./schema";
 const connectionString = process.env.DATABASE_URL;
 if (!connectionString) {
   throw new Error("DATABASE_URL is not set");
+}
+
+// 진단: 비밀번호 가린 형태로 host:port 노출 (한 번만).
+// next.config.ts의 removeConsole이 console.log는 제거하지만 warn은 유지.
+if (process.env.NODE_ENV !== "test") {
+  const masked = connectionString.replace(/\/\/[^@]+@/, "//***@");
+  console.warn("[db] connecting to", masked);
 }
 
 const queryClient = postgres(connectionString, {
