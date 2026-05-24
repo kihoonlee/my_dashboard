@@ -12,6 +12,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyCronRequest, getCronUserId } from "@/lib/cron/auth";
+import { requestOrigin } from "@/lib/http/origin";
 
 export async function GET(request: NextRequest) {
   const auth = verifyCronRequest(request);
@@ -27,7 +28,9 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://127.0.0.1:3000";
+  // self-call: NEXT_PUBLIC_APP_URL은 빌드 타임에 박혀 prod/dev 포트 불일치 위험.
+  // 자기 자신 origin(Host 헤더)으로 호출하면 어느 포트든 정확히 자기로 감.
+  const baseUrl = requestOrigin(request);
   const message =
     "매일 오전 8시 자동 실행. list_yesterday_actions / list_yesterday_memos / list_today_events 차례로 호출해 어제 활동을 정리하고 오늘 해야 할 일을 추출해 create_todo로 등록한 뒤, 한국어 마크다운으로 작성한 일일 리포트를 send_notification(kind='daily_report')로 발송해.";
 
