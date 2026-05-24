@@ -177,6 +177,13 @@ export const chatMessages = pgTable(
       onDelete: "set null",
     }),
     toolCalls: jsonb("tool_calls"),
+    /**
+     * 메시지에 첨부된 파일 메타. 현재는 이미지만 지원.
+     * 형태: [{ type: "image", storagePath, contentType, fileName, sizeBytes }, ...]
+     * supabase storage `diary` bucket 재사용 (path prefix: chat/<userId>/...).
+     * LLM 호출 시 signed URL 발급해 Anthropic content block에 image source로 첨부.
+     */
+    attachments: jsonb("attachments").default([]).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

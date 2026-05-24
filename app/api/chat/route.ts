@@ -20,12 +20,22 @@
 //   done:    { fullText, assistantMessageId, agentLogId, iterations, durationMs, costUsd, usage, isError }
 
 import { type NextRequest } from "next/server";
+import type Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db/client";
 import { agents, chatMessages, chatSessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureUser } from "@/lib/users/ensure";
 import { requestOrigin } from "@/lib/http/origin";
+
+type Attachment = {
+  type: "image";
+  storagePath: string;
+  bucket?: string;
+  contentType: string;
+  fileName: string;
+};
+
 
 function jsonError(error: string, status: number): Response {
   return new Response(JSON.stringify({ error }), {
@@ -44,14 +54,30 @@ const ALLOWED_AGENTS = new Set([
 ]);
 
 export async function POST(request: NextRequest) {
-  let body: { sessionId?: string; message?: string; agent?: string };
+  let body: {
+    sessionId?: string;
+    message?: string;
+    agent?: string;
+    attachments?: Attachment[];
+  };
   try {
     body = await request.json();
   } catch {
     return jsonError("invalid_json", 400);
   }
-  const userMessageText = body.message?.trim();
-  if (!userMessageText) return jsonError("message is required", 400);
+  const userMessageText = body.message?.trim() ?? "";
+  const attachments: Attachment[] = Array.isArray(body.attachments)
+    ? body.attachments.filter(
+        (a): a is Attachment =>
+          !!a &&
+          a.type === "image" &&
+          typeof a.storagePath === "string" &&
+          typeof a.contentType === "string",
+      )
+    : [];
+  if (!userMessageText && attachments.length === 0) {
+    return jsonError("message or attachments required", 400);
+  }
   const agentName =
     body.agent && ALLOWED_AGENTS.has(body.agent) ? body.agent : "main";
 
@@ -97,8 +123,49 @@ export async function POST(request: NextRequest) {
 
   const [userMsg] = await db
     .insert(chatMessages)
-    .values({ sessionId, role: "user", content: userMessageText })
+    .values({
+      sessionId,
+      role: "user",
+      content: userMessageText,
+      attachments,
+    })
     .returning({ id: chatMessages.id });
+
+  // 첨부 이미지가 있으면 supabase storage에서 다운로드 → base64 embed.
+  // signed URL 방식은 Anthropic이 fetch 단계에서 "Could not process image" 거부하는
+  // 케이스 있어 base64로 inline (Anthropic vision은 base64 source 가장 안정적).
+  let messageContent: Anthropic.ContentBlockParam[] | null = null;
+  if (attachments.length > 0) {
+    const supabase = await createSupabaseServerClient();
+    const blocks: Anthropic.ContentBlockParam[] = [];
+    for (const att of attachments) {
+      const bucket = att.bucket ?? "diary";
+      const { data: blob, error } = await supabase.storage
+        .from(bucket)
+        .download(att.storagePath);
+      if (error || !blob) {
+        return jsonError(
+          `attachment_download_failed: ${att.storagePath}`,
+          500,
+        );
+      }
+      const ab = await blob.arrayBuffer();
+      const base64 = Buffer.from(ab).toString("base64");
+      const mediaType = (att.contentType || "image/png") as
+        | "image/png"
+        | "image/jpeg"
+        | "image/gif"
+        | "image/webp";
+      blocks.push({
+        type: "image",
+        source: { type: "base64", media_type: mediaType, data: base64 },
+      });
+    }
+    if (userMessageText) {
+      blocks.push({ type: "text", text: userMessageText });
+    }
+    messageContent = blocks;
+  }
 
   // self-fetch: NEXT_PUBLIC_APP_URL은 빌드 타임에 박혀 prod/dev 포트 불일치 위험.
   // request의 Host 헤더로 자기 origin 호출 (lib/http/origin.ts 패턴, daily-8am과 동일).
@@ -112,7 +179,12 @@ export async function POST(request: NextRequest) {
       "x-myhub-agent-depth": "0",
       "x-myhub-user-id": userId,
     },
-    body: JSON.stringify({ message: userMessageText, trigger: "chat" }),
+    body: JSON.stringify({
+      ...(messageContent
+        ? { messageContent }
+        : { message: userMessageText }),
+      trigger: "chat",
+    }),
   });
 
   if (!upstream.ok || !upstream.body) {

@@ -15,10 +15,21 @@ import {
   Plus,
   Search,
   Wrench,
+  X,
   XCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { streamSseFetch } from "@/lib/sse/client";
+
+type PendingAttachment = {
+  type: "image";
+  storagePath: string;
+  bucket: string;
+  contentType: string;
+  fileName: string;
+  /** UI thumbnail용 — 업로드 끝나면 supabase signed URL (TTL 짧음). */
+  previewUrl: string;
+};
 
 const AGENTS: Array<{ id: string; name: string; role: string }> = [
   { id: "main", name: "혜원", role: "메인 비서 · CSO · 토론 진행" },
@@ -92,6 +103,11 @@ function ChatContent() {
   const [streaming, setStreaming] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // 이미지 첨부 (Claude vision)
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [uploading, setUploading] = useState<boolean>(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // 세션 목록 (좌측 second-column)
   const [sessions, setSessions] = useState<SessionItem[]>([]);
@@ -183,15 +199,79 @@ function ChatContent() {
     router.replace(`/chat?agent=${agentId}`);
   }
 
+  async function uploadFiles(files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploading(true);
+    setError(null);
+    try {
+      const uploaded: PendingAttachment[] = [];
+      for (const file of Array.from(files)) {
+        if (!file.type.startsWith("image/")) continue;
+        const res = await fetch("/api/storage/chat-upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: file.name,
+            contentType: file.type,
+          }),
+        });
+        const meta = await res.json();
+        if (!res.ok) {
+          throw new Error(meta.error ?? `upload prep failed: ${res.status}`);
+        }
+        const putRes = await fetch(meta.signedUrl, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        if (!putRes.ok) {
+          throw new Error(`storage put failed: ${putRes.status}`);
+        }
+        uploaded.push({
+          type: "image",
+          storagePath: meta.storagePath,
+          bucket: meta.bucket,
+          contentType: file.type,
+          fileName: file.name,
+          previewUrl: URL.createObjectURL(file),
+        });
+      }
+      setAttachments((prev) => [...prev, ...uploaded]);
+    } catch (e) {
+      setError(
+        `이미지 업로드 실패: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function removeAttachment(idx: number) {
+    setAttachments((prev) => {
+      const next = [...prev];
+      const [removed] = next.splice(idx, 1);
+      if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+      return next;
+    });
+  }
+
   async function send(text?: string) {
     const t = (text ?? input).trim();
-    if (!t || streaming) return;
+    const hasAttachments = attachments.length > 0;
+    if ((!t && !hasAttachments) || streaming || uploading) return;
     setInput("");
     setError(null);
 
+    const sendAttachments = attachments;
+    setAttachments([]);
+
     setMessages((prev) => [
       ...prev,
-      { role: "user", content: t },
+      {
+        role: "user",
+        content: t || (hasAttachments ? `📎 이미지 ${sendAttachments.length}개` : ""),
+      },
       {
         role: "assistant",
         content: "",
@@ -219,6 +299,13 @@ function ChatContent() {
           sessionId,
           message: t,
           agent: currentAgent,
+          attachments: sendAttachments.map((a) => ({
+            type: a.type,
+            storagePath: a.storagePath,
+            bucket: a.bucket,
+            contentType: a.contentType,
+            fileName: a.fileName,
+          })),
         }),
       },
       {
@@ -585,15 +672,61 @@ function ChatContent() {
 
         {/* 입력 — Owllet 큰 둥근 input + 좌측 첨부 + 우측 send */}
         <div className="px-6 pb-6 pt-2">
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl mx-auto flex flex-col gap-2">
+            {/* attachments preview row */}
+            {(attachments.length > 0 || uploading) && (
+              <div className="flex flex-wrap gap-2">
+                {attachments.map((a, i) => (
+                  <div
+                    key={`${a.storagePath}-${i}`}
+                    className="relative h-16 w-16 rounded-2xl overflow-hidden border border-border bg-muted group"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={a.previewUrl}
+                      alt={a.fileName}
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(i)}
+                      aria-label="첨부 제거"
+                      className="absolute top-1 right-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-foreground/80 text-background opacity-0 group-hover:opacity-100 transition"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {uploading && (
+                  <div className="h-16 w-16 rounded-2xl border border-dashed border-border bg-muted/40 flex items-center justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center gap-2 rounded-3xl border border-border bg-card px-4 py-2 shadow-sm">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => void uploadFiles(e.target.files)}
+                className="hidden"
+              />
               <button
                 type="button"
-                className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-muted text-muted-foreground"
-                aria-label="첨부 (미구현)"
-                disabled
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading || streaming}
+                className="inline-flex items-center justify-center w-9 h-9 rounded-full hover:bg-muted text-muted-foreground disabled:opacity-40"
+                aria-label="이미지 첨부"
+                title="이미지 첨부"
               >
-                <Paperclip className="h-4 w-4" />
+                {uploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Paperclip className="h-4 w-4" />
+                )}
               </button>
               <input
                 type="text"
@@ -612,7 +745,11 @@ function ChatContent() {
               <button
                 type="button"
                 onClick={() => send()}
-                disabled={streaming || !input.trim()}
+                disabled={
+                  streaming ||
+                  uploading ||
+                  (!input.trim() && attachments.length === 0)
+                }
                 className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-foreground text-background disabled:opacity-30 hover:opacity-90 transition"
                 aria-label="보내기"
               >

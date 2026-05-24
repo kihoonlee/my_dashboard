@@ -217,7 +217,7 @@ async function runJsonMode(opts: {
     name: string,
     input: Record<string, unknown>,
   ) => Promise<ToolResult>;
-  userMessage: string;
+  userMessage: string | Anthropic.ContentBlockParam[];
   trigger: string;
 }): Promise<NextResponse> {
   const { agent, systemPrompt, tools, runTool, userMessage, trigger } = opts;
@@ -350,7 +350,7 @@ function runSseMode(opts: {
     name: string,
     input: Record<string, unknown>,
   ) => Promise<ToolResult>;
-  userMessage: string;
+  userMessage: string | Anthropic.ContentBlockParam[];
   trigger: string;
 }): Response {
   const { agent, systemPrompt, tools, runTool, userMessage, trigger } = opts;
@@ -567,19 +567,30 @@ export async function POST(
     }
   }
 
-  let body: { message?: string; trigger?: string };
+  let body: {
+    message?: string;
+    trigger?: string;
+    messageContent?: Anthropic.ContentBlockParam[];
+  };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
+  // messageContent (Anthropic content block array)가 있으면 그걸 우선 — chat에서
+  // 이미지 첨부 전달용. 없으면 message string fallback.
   const userMessage = body.message?.trim();
-  if (!userMessage) {
+  const messageContent = Array.isArray(body.messageContent)
+    ? body.messageContent
+    : null;
+  if (!userMessage && (!messageContent || messageContent.length === 0)) {
     return NextResponse.json(
-      { error: "message is required" },
+      { error: "message or messageContent is required" },
       { status: 400 },
     );
   }
+  const userMessageForLlm: string | Anthropic.ContentBlockParam[] =
+    messageContent ?? (userMessage ?? "");
   const trigger = body.trigger ?? "manual";
 
   const userId = await resolveUserId(request);
@@ -631,7 +642,7 @@ export async function POST(
       systemPrompt,
       tools,
       runTool,
-      userMessage,
+      userMessage: userMessageForLlm,
       trigger,
     });
   }
@@ -641,7 +652,7 @@ export async function POST(
     systemPrompt,
     tools,
     runTool,
-    userMessage,
+    userMessage: userMessageForLlm,
     trigger,
   });
 }
