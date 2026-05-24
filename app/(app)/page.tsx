@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import { HomeHero } from "@/components/home-hero";
+import { DashboardWidgets } from "@/components/dashboard/widgets";
 import { AgentAvatar } from "@/components/agent-badge";
 
 type AgentCard = {
@@ -80,8 +81,11 @@ export default function Home() {
   return (
     <div className="flex flex-col flex-1 items-center bg-background">
       <main className="flex flex-1 w-full max-w-6xl flex-col gap-10 py-10 px-6 sm:px-10">
-        {/* 보조 에이전트 환영 Hero */}
+        {/* 보조 에이전트 환영 Hero (자동 인사) */}
         <HomeHero />
+
+        {/* 오늘의 운영 overview — 알림 · Todo · 캘린더 · 에이전트 활동 */}
+        <DashboardWidgets />
 
         {/* 6명 에이전트 카드 그리드 — Owllet 추천 AI 스타일 */}
         <section className="flex flex-col gap-4">

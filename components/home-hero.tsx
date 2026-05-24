@@ -1,9 +1,10 @@
 "use client";
 
-// 홈 Hero — Owllet 인사말 스타일.
-// 큰 인사 + 옅은 chip 형식 제안. 인사 받기 버튼을 누르면 보조 에이전트(민지) 응답이 채워짐.
+// 홈 Hero — 민지 인사 자동 표시 (6h TTL 캐시 — /api/home/greeting).
+// 첫 진입 시 LLM 호출 1회, 같은 bucket(KST 0-5/6-11/12-17/18-23) 안에선 캐시 hit.
+// "다시 받기" 버튼은 force=true로 명시적 재생성.
 
-import { useState, useTransition } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { AgentAvatar } from "@/components/agent-badge";
@@ -17,40 +18,47 @@ const SUGGESTIONS = [
   { label: "내일 일정 등록", href: "/chat?agent=calendar" },
 ];
 
-export function HomeHero() {
-  const [briefing, setBriefing] = useState<string | null>(null);
-  const [meta, setMeta] = useState<{
-    durationMs: number;
-    costUsd: number;
-  } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+type GreetingResponse = {
+  text: string;
+  bucket: "morning" | "afternoon" | "evening" | "night";
+  dateKey: string;
+  cached: boolean;
+  costUsd?: number;
+  durationMs?: number;
+};
 
-  function fetchBriefing() {
+export function HomeHero() {
+  const [greeting, setGreeting] = useState<GreetingResponse | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchGreeting = useCallback(async (force = false) => {
+    if (force) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
-    startTransition(async () => {
-      try {
-        const res = await fetch("/api/agents/assistant/invoke", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message:
-              "사용자가 홈에 진입했습니다. get_user_context 도구로 최근 일기·메모·todo 패턴을 살펴본 뒤, 따뜻한 인사 + 오늘 도움이 될 한 줄을 3-5줄로 전달해주세요.",
-            trigger: "home_hero",
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data?.error ?? `status ${res.status}`);
-        setBriefing(data.text || "(빈 응답)");
-        setMeta({
-          durationMs: data.durationMs,
-          costUsd: data.costUsd ?? 0,
-        });
-      } catch (e) {
-        setError(`민지 호출 실패: ${e instanceof Error ? e.message : String(e)}`);
+    try {
+      const url = force ? "/api/home/greeting?force=true" : "/api/home/greeting";
+      const res = await fetch(url, { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error ?? `status ${res.status}`);
       }
-    });
-  }
+      setGreeting(data as GreetingResponse);
+    } catch (e) {
+      setError(`민지 호출 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchGreeting(false);
+  }, [fetchGreeting]);
 
   return (
     <section className="flex flex-col items-center text-center gap-5 pt-8 pb-4">
@@ -66,7 +74,36 @@ export function HomeHero() {
         </p>
       </div>
 
-      {/* 제안 chip */}
+      {/* 인사 카드 — 로딩 중에는 skeleton, 끝나면 자동 표시 */}
+      <div className="w-full max-w-2xl">
+        {loading ? (
+          <div className="rounded-3xl border border-border bg-card p-6 flex flex-col gap-2.5 text-left">
+            <div className="h-3 w-3/4 bg-muted/50 rounded-full animate-pulse" />
+            <div className="h-3 w-full bg-muted/40 rounded-full animate-pulse" />
+            <div className="h-3 w-5/6 bg-muted/40 rounded-full animate-pulse" />
+          </div>
+        ) : error ? (
+          <div
+            role="alert"
+            className="border border-destructive/30 bg-destructive/5 text-destructive rounded-2xl p-4 text-sm text-left"
+          >
+            {error}
+          </div>
+        ) : greeting ? (
+          <div className="rounded-3xl border border-border bg-card p-6 text-left flex flex-col gap-3">
+            <Markdown>{greeting.text}</Markdown>
+            {!greeting.cached &&
+              greeting.durationMs !== undefined &&
+              greeting.costUsd !== undefined && (
+                <div className="pt-2 border-t border-border/50 text-[10px] text-muted-foreground/80 font-mono">
+                  {greeting.durationMs}ms · ${greeting.costUsd.toFixed(6)}
+                </div>
+              )}
+          </div>
+        ) : null}
+      </div>
+
+      {/* 제안 chip + 재생성 */}
       <div className="flex flex-wrap justify-center gap-2 max-w-2xl">
         {SUGGESTIONS.map((s) => (
           <Link
@@ -78,41 +115,21 @@ export function HomeHero() {
           </Link>
         ))}
         <Button
-          variant="default"
+          variant="outline"
           size="sm"
-          onClick={fetchBriefing}
-          disabled={isPending}
+          onClick={() => void fetchGreeting(true)}
+          disabled={loading || refreshing}
         >
-          {isPending ? (
+          {refreshing ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <>
               <Sparkles className="h-3.5 w-3.5" />
-              민지에게 인사 받기
+              다시 받기
             </>
           )}
         </Button>
       </div>
-
-      {error && (
-        <div
-          role="alert"
-          className="w-full max-w-2xl border border-destructive/30 bg-destructive/5 text-destructive rounded-2xl p-4 text-sm text-left"
-        >
-          {error}
-        </div>
-      )}
-
-      {briefing && (
-        <div className="w-full max-w-2xl rounded-3xl border border-border bg-card p-6 text-left flex flex-col gap-3">
-          <Markdown>{briefing}</Markdown>
-          {meta && (
-            <div className="pt-2 border-t border-border/50 text-[10px] text-muted-foreground/80 font-mono">
-              {meta.durationMs}ms · ${meta.costUsd.toFixed(6)}
-            </div>
-          )}
-        </div>
-      )}
     </section>
   );
 }
