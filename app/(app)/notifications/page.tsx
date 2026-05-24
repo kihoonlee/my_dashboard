@@ -94,7 +94,7 @@ export default function NotificationsPage() {
       <p className="text-xs text-muted-foreground mb-4">안 읽은 알림 {unread}개</p>
 
       {error && (
-        <div className="mb-4 border border-destructive/40 bg-destructive/10 text-destructive rounded-lg p-3 text-sm">
+        <div className="mb-4 border border-destructive/30 bg-destructive/5 text-destructive rounded-2xl p-3 text-sm">
           {error}
         </div>
       )}
@@ -113,10 +113,10 @@ export default function NotificationsPage() {
             <li
               key={n.id}
               className={cn(
-                "rounded-lg border p-3",
+                "rounded-2xl border p-3.5",
                 n.readAt
                   ? "border-border bg-card"
-                  : "border-primary/30 bg-primary/5",
+                  : "border-foreground/20 bg-card shadow-sm",
               )}
             >
               <div className="flex items-start justify-between gap-2 mb-1.5">

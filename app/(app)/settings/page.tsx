@@ -261,7 +261,7 @@ export default function SettingsPage() {
   if (!data) {
     return (
       <div className="p-6 max-w-3xl mx-auto">
-        <div className="border border-destructive/40 bg-destructive/10 text-destructive rounded-lg p-3 text-sm flex items-center gap-2">
+        <div className="border border-destructive/30 bg-destructive/5 text-destructive rounded-2xl p-3 text-sm flex items-center gap-2">
           <AlertCircle className="h-4 w-4" />
           {error ?? "설정을 불러올 수 없습니다"}
         </div>
@@ -276,7 +276,7 @@ export default function SettingsPage() {
   return (
     <div className="flex flex-col gap-8 p-6 max-w-3xl mx-auto w-full">
       <header className="flex items-center gap-3">
-        <div className="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
+        <div className="size-10 rounded-2xl bg-foreground text-background flex items-center justify-center">
           <SettingsIcon className="h-5 w-5" />
         </div>
         <div className="flex-1 min-w-0">
@@ -290,14 +290,14 @@ export default function SettingsPage() {
       {error && (
         <div
           role="alert"
-          className="border border-destructive/40 bg-destructive/10 text-destructive rounded-lg p-3 text-sm flex items-start gap-2"
+          className="border border-destructive/30 bg-destructive/5 text-destructive rounded-2xl p-3 text-sm flex items-start gap-2"
         >
           <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
           <span className="flex-1">{error}</span>
         </div>
       )}
       {info && (
-        <div className="text-xs text-primary bg-primary/10 border border-primary/20 rounded-lg px-3 py-2 flex items-center gap-2">
+        <div className="text-xs text-foreground bg-[var(--pastel-mint)] border border-transparent rounded-full px-3.5 py-1.5 inline-flex items-center gap-2 self-start">
           <CheckCircle2 className="h-3.5 w-3.5" />
           {info}
         </div>
@@ -321,7 +321,7 @@ export default function SettingsPage() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="민지가 부를 이름"
-              className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
+              className="rounded-2xl border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:border-foreground"
             />
           </label>
           <label className="flex flex-col gap-1">
@@ -332,7 +332,7 @@ export default function SettingsPage() {
               value={defaultGithubOrg}
               onChange={(e) => setDefaultGithubOrg(e.target.value)}
               placeholder="예: FlowTo-ai"
-              className="rounded-lg border border-border bg-background px-3 py-1.5 text-sm focus:outline-none focus:border-primary"
+              className="rounded-2xl border border-border bg-background px-4 py-2 text-sm focus:outline-none focus:border-foreground"
             />
             <span className="text-[11px] text-muted-foreground">
               GitHub sync에서 ?org= 미지정 시 기본값으로 사용 (참고용 — 현재 sync는 FlowTo-ai 고정)
@@ -349,7 +349,7 @@ export default function SettingsPage() {
 
       {/* 동기화 */}
       <Section title="동기화" icon={RefreshCw}>
-        <ul className="flex flex-col divide-y divide-border border border-border rounded-xl overflow-hidden">
+        <ul className="flex flex-col divide-y divide-border border border-border rounded-2xl overflow-hidden">
           {(Object.keys(SYNC_LABEL) as SyncKind[]).map((kind) => {
             const meta = data.sync[kind];
             const Icon = SYNC_ICON[kind];
@@ -441,7 +441,7 @@ export default function SettingsPage() {
       {/* 데일리 인사이트 */}
       {data.todayInsight && (
         <Section title="오늘의 한 마디 (캐시)" icon={CheckCircle2}>
-          <div className="border border-border rounded-xl bg-card p-3">
+          <div className="border border-border rounded-2xl bg-card p-3.5">
             <div className="text-[11px] text-muted-foreground font-mono mb-1">
               {data.todayInsight.date ?? "—"}
             </div>
@@ -535,7 +535,7 @@ function IntegrationRow({
   mono?: boolean;
 }) {
   return (
-    <div className="flex items-start gap-3 border border-border rounded-xl bg-card px-3 py-2.5">
+    <div className="flex items-start gap-3 border border-border rounded-2xl bg-card px-3.5 py-3">
       <span
         className={cn(
           "mt-0.5 size-2 rounded-full shrink-0",
@@ -684,7 +684,7 @@ function ApiKeyCard({
           };
 
   return (
-    <div className="border border-border rounded-xl bg-card p-3 flex flex-col gap-2.5">
+    <div className="border border-border rounded-2xl bg-card p-3.5 flex flex-col gap-2.5">
       <div className="flex items-center gap-2 flex-wrap">
         <span className="text-sm font-medium">{meta.label}</span>
         <span
@@ -733,7 +733,7 @@ function ApiKeyCard({
           onChange={(e) => setValue(e.target.value)}
           placeholder={meta.placeholder}
           disabled={busy !== null}
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-1.5 text-sm font-mono focus:outline-none focus:border-primary"
+          className="flex-1 rounded-full border border-border bg-background px-4 py-2 text-sm font-mono focus:outline-none focus:border-foreground"
         />
         <Button
           size="sm"
@@ -766,12 +766,12 @@ function ApiKeyCard({
       </div>
 
       {localError && (
-        <div className="text-[11px] text-destructive bg-destructive/10 border border-destructive/30 rounded-md px-2 py-1.5">
+        <div className="text-[11px] text-destructive bg-destructive/5 border border-destructive/30 rounded-xl px-2.5 py-1.5">
           {localError}
         </div>
       )}
       {localInfo && (
-        <div className="text-[11px] text-primary bg-primary/10 border border-primary/20 rounded-md px-2 py-1.5">
+        <div className="text-[11px] text-foreground bg-[var(--pastel-mint)] border border-transparent rounded-xl px-2.5 py-1.5">
           {localInfo}
         </div>
       )}
