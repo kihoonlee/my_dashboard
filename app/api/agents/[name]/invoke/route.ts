@@ -21,6 +21,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db/client";
 import { agents, agentLogs, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { requestOrigin } from "@/lib/http/origin";
 import {
   invokeAgent,
   streamAgent,
@@ -72,6 +73,7 @@ function getAgentTools(
   permissions: ToolPerms,
   callerDepth: number,
   userId: string,
+  baseUrl: string,
 ): {
   tools: AgentTool[];
   runTool: (name: string, input: Record<string, unknown>) => Promise<ToolResult>;
@@ -115,7 +117,13 @@ function getAgentTools(
     input: Record<string, unknown>,
   ): Promise<ToolResult> => {
     if (name === "ask_agent") {
-      return await runAskAgent(englishName, callerDepth, userId, input);
+      return await runAskAgent(
+        englishName,
+        callerDepth,
+        userId,
+        input,
+        baseUrl,
+      );
     }
     return await runDomainTool(name, input);
   };
@@ -601,6 +609,7 @@ export async function POST(
     (agent.toolPermissions as ToolPerms) ?? {},
     depth,
     userId,
+    requestOrigin(request),
   );
 
   const [user] = await db

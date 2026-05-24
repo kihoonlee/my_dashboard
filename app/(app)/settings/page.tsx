@@ -396,7 +396,7 @@ export default function SettingsPage() {
       </Section>
 
       <footer className="text-xs text-muted-foreground border-t border-border pt-4">
-        Phase 7 — 단일 사용자 화이트리스트 모드. 환경변수는 `.env.local`에서 직접 수정 후 dev 서버 재시작.
+        MyHub v2 · 단일 사용자 화이트리스트 모드 (ALLOWED_EMAIL). 환경변수는 `.env.local`에서 직접 수정 후 dev 서버 재시작.
       </footer>
     </div>
   );
@@ -493,22 +493,22 @@ const PROVIDER_META: Record<
   anthropic: {
     label: "Anthropic API Key",
     placeholder: "sk-ant-...",
-    doc: "혜원·민지 (orchestrator, Sonnet 4.6) 호출에 사용",
+    doc: "6명 에이전트 전원 (Sonnet 4.6 / Haiku 4.5) 호출에 사용",
   },
   gemini: {
     label: "Google Gemini API Key",
     placeholder: "AIza...",
-    doc: "수민·현주·하영·서연·도연·다솜·민영·정연 (Gemini 3.1) 호출",
+    doc: "Gemini 라우팅용 (현재 v2 시드는 전원 Anthropic, 옵션)",
   },
   openai: {
     label: "OpenAI API Key",
     placeholder: "sk-proj-...",
-    doc: "옵시디언 의미 검색 임베딩 (text-embedding-3-small)",
+    doc: "예비 (v2에서 활성 호출처 없음)",
   },
   github: {
     label: "GitHub PAT",
     placeholder: "ghp_... 또는 github_pat_...",
-    doc: "GitHub 활동 동기화 (FlowTo-ai 조직 repo)",
+    doc: "예비 (v2에서 활성 호출처 없음)",
   },
 };
 

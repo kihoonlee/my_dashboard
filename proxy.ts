@@ -68,6 +68,13 @@ export async function proxy(request: NextRequest) {
 
   // 인증 안 됨 → 로그인 페이지로 (public path 또는 내부 agent 호출 또는 cron 제외)
   if (!user && !isPublic && !isInternalAgentCall && !isCronCall) {
+    // /api/* 는 HTML redirect 대신 401 JSON 반환 — client fetch가 redirect를
+    // follow하고 HTML을 JSON 파싱하다 의미 없는 에러로 폭발하는 패턴 회피.
+    // OAuth params는 페이지 redirect 분기에서만 처리하므로 API path는 영향 없음.
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
     // OAuth provider 응답이 site_url(=`/`) 으로 떨어진 케이스 — Supabase가 redirectTo
     // 매칭에 실패해 `/?code=...&state=...`로 떨어뜨릴 수 있음.
     // 그대로 `/auth/login`으로 redirect하면 ?code가 같이 옮겨가 버려 PKCE verifier가

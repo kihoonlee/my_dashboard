@@ -43,3 +43,4 @@ next-env.d.ts
 
 # claude code 세션 상태 (worktrees, plans 등 로컬 전용)
 .claude/
+.gstack/

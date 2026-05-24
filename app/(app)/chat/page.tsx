@@ -301,7 +301,13 @@ function ChatContent() {
   }
 
   function selectSession(s: SessionItem) {
-    router.replace(`/chat?agent=${currentAgent}&session=${s.id}`);
+    // router.replace로 query만 추가 시 Next.js 16에서 useSearchParams 재평가가
+    // 일관되게 안 일어나는 케이스가 있어 state 직접 갱신 + history 동기화.
+    const url = `/chat?agent=${currentAgent}&session=${s.id}`;
+    window.history.replaceState(null, "", url);
+    setSessionId(s.id);
+    setMessages([]);
+    setError(null);
   }
 
   const isEmpty = messages.length === 0 && !streaming;

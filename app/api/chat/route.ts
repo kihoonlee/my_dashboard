@@ -25,6 +25,7 @@ import { agents, chatMessages, chatSessions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { ensureUser } from "@/lib/users/ensure";
+import { requestOrigin } from "@/lib/http/origin";
 
 function jsonError(error: string, status: number): Response {
   return new Response(JSON.stringify({ error }), {
@@ -99,7 +100,9 @@ export async function POST(request: NextRequest) {
     .values({ sessionId, role: "user", content: userMessageText })
     .returning({ id: chatMessages.id });
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://127.0.0.1:3000";
+  // self-fetch: NEXT_PUBLIC_APP_URL은 빌드 타임에 박혀 prod/dev 포트 불일치 위험.
+  // request의 Host 헤더로 자기 origin 호출 (lib/http/origin.ts 패턴, daily-8am과 동일).
+  const baseUrl = requestOrigin(request);
   const upstream = await fetch(`${baseUrl}/api/agents/${agentName}/invoke`, {
     method: "POST",
     headers: {

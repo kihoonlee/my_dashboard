@@ -57,6 +57,8 @@ export async function runAskAgent(
   callerDepth: number,
   callerUserId: string,
   input: Record<string, unknown>,
+  /** caller invoke route의 self origin — NEXT_PUBLIC_APP_URL 빌드타임 박힘 회피. */
+  baseUrl: string,
 ): Promise<{ ok: true; result: unknown } | { ok: false; error: string }> {
   const targetAgent = typeof input.agent === "string" ? input.agent : "";
   const message = typeof input.message === "string" ? input.message : "";
@@ -112,9 +114,7 @@ export async function runAskAgent(
     };
   }
 
-  // 내부 invoke route를 호출. NEXT_PUBLIC_APP_URL을 base로 사용.
-  const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://127.0.0.1:3000";
+  // 내부 invoke route를 호출. baseUrl은 caller가 self origin으로 넘김.
   const url = `${baseUrl}/api/agents/${targetAgent}/invoke`;
 
   try {
