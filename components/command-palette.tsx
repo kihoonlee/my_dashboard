@@ -24,6 +24,7 @@ import {
   Moon,
   PlusCircle,
   RefreshCw,
+  Search,
   Sun,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -150,6 +151,14 @@ function CommandPaletteModal({ onClose }: { onClose: () => void }) {
         icon: PlusCircle,
         href: "/chat?agent=main",
         group: "액션",
+      },
+      {
+        id: "nav-search",
+        label: "통합 검색",
+        keywords: ["search", "검색", "찾기"],
+        icon: Search,
+        href: "/search",
+        group: "이동",
       },
       {
         id: "action-sync-calendar",
